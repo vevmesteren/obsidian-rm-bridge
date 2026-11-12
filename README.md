@@ -16,19 +16,28 @@ Obsidian .md  ←  transcribed text (vision LLM)  ←  reMarkable
 
 ## Quick Start
 
-### Install
+### Install from source (recommended until PyPI release)
 
 ```bash
-pip install obsidian-rm-bridge
-ormb setup          # installs Playwright browser
-ormb setup --rmapi  # downloads rmapi binary
+git clone https://github.com/vevmesteren/obsidian-rm-bridge.git
+cd obsidian-rm-bridge
+
+# Use a venv (avoids system Python permission issues)
+python3 -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+pip install -e .
+playwright install chromium      # needed for PDF rendering
+
+ormb setup --rmapi               # downloads rmapi binary for your platform
 
 # Pair with reMarkable (one-time)
 ormb pair
 
 # Configure your vault path
-ormb config set vault_path ~/Documents/Obsidian
+ormb config set vault.path ~/Documents/Obsidian
 ```
+
+<!-- Once published to PyPI, the above can be replaced with `pip install obsidian-rm-bridge` -->
 
 ### Publish to reMarkable (no API key needed)
 
@@ -76,17 +85,18 @@ Annotations are appended as:
 
 ```bash
 brew install python
-pip install obsidian-rm-bridge
-ormb setup
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e .
 ormb setup --rmapi
 ```
 
 ### Windows
 
-```bash
+```powershell
 # Install Python 3.10+ from python.org (check "Add to PATH")
-pip install obsidian-rm-bridge
-ormb setup
+python -m venv .venv
+.venv\Scripts\activate
+pip install -e .
 ormb setup --rmapi
 
 # Or use WSL (full Linux environment):
@@ -97,9 +107,9 @@ wsl --install -d Ubuntu
 ### Linux
 
 ```bash
-sudo apt install python3 python3-pip
-pip install obsidian-rm-bridge
-ormb setup
+sudo apt install python3 python3-pip python3-venv
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e .
 ormb setup --rmapi
 ```
 
