@@ -25,7 +25,7 @@ MERMAID_JS_URL = (
 )
 MERMAID_WIDTH = 1200
 
-_MERMAID_FENCE = r'```mermaid\n(.*?)\n```'
+_MERMAID_FENCE = r'```mermaid\r?\n(.*?)\r?\n```'
 
 # Minimal HTML host that loads mermaid and renders one diagram into a container
 # we can screenshot. ``waitUntil=networkidle`` ensures mermaid.js has loaded.

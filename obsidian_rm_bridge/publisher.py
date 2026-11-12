@@ -33,21 +33,34 @@ __all__ = [
 
 # Match markdown image syntax: ![alt](relative/path.png)
 _IMG_RE = re.compile(r'!\[([^\]]*)\]\(([^)]+)\)')
+# Match Obsidian wiki-embed syntax: ![[image.png]]
+_WIKI_EMBED_RE = re.compile(r'!\[\[([^\]]+)\]\]')
 
 
 def _resolve_image_paths(content: str, base_dir: Path) -> str:
     """Resolve relative image paths to absolute file:// URIs (Copilot #6).
 
-    Absolute paths (starting with / or containing :) are left unchanged.
+    Handles both standard markdown ``![alt](src)`` and Obsidian wiki-embed
+    ``![[image.png]]`` syntax (adversarial review: wiki-embeds are Obsidian's
+    default image syntax). Absolute paths and URLs are left unchanged.
     """
-    def _replace(match: re.Match) -> str:
+
+    def _replace_std(match: re.Match) -> str:
         alt, src = match.group(1), match.group(2)
         if src.startswith(("/", "data:")) or "://" in src:
             return match.group(0)
         abs_path = (base_dir / src).resolve()
         return f'![{alt}]({abs_path.as_uri()})'
 
-    return _IMG_RE.sub(_replace, content)
+    def _replace_wiki(match: re.Match) -> str:
+        src = match.group(1)
+        if src.startswith(("/", "data:")) or "://" in src:
+            return match.group(0)
+        abs_path = (base_dir / src).resolve()
+        return f'![{src}]({abs_path.as_uri()})'
+
+    content = _WIKI_EMBED_RE.sub(_replace_wiki, content)
+    return _IMG_RE.sub(_replace_std, content)
 
 
 def md_to_html(md_path: str | os.PathLike) -> str:

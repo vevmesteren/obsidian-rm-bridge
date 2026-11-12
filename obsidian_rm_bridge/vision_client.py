@@ -81,7 +81,13 @@ def transcribe_page(
         timeout=timeout,
     )
     response.raise_for_status()
-    text = response.json()["choices"][0]["message"]["content"].strip()
+    try:
+        text = response.json()["choices"][0]["message"]["content"].strip()
+    except (KeyError, IndexError, TypeError) as exc:
+        raise RuntimeError(
+            f"Unexpected OpenRouter response (status {response.status_code}): "
+            f"{response.text[:300]}"
+        ) from exc
     # Use exact match against the sentinel, not substring (Copilot #11).
     # "No annotations on the previous draft" is real handwriting, not a
     # no-annotation signal. The prompt asks for exactly "No annotations".
@@ -99,12 +105,25 @@ def transcribe_pages(
     """Transcribe every page; return ``[(page_number, text), ...]`` for annotated pages.
 
     All pages are sent to the model — no pre-filtering by drawing count (DC-6).
+    A transient API error on one page does not abort the entire run
+    (adversarial review: per-page try/except, continue, log).
     """
     out = []
+    failed = []
     for i, png_path in enumerate(png_paths, 1):
-        text = transcribe_page(png_path, api_key, model=model)
+        try:
+            text = transcribe_page(png_path, api_key, model=model)
+        except Exception as exc:  # noqa: BLE001 — degrade gracefully per page
+            print(f"  Warning: page {i} transcription failed: {exc}", file=__import__("sys").stderr)
+            failed.append(i)
+            continue
         if text:
             out.append((i, text))
+    if failed:
+        print(
+            f"  {len(failed)} page(s) failed: {', '.join(str(p) for p in failed)}",
+            file=__import__("sys").stderr,
+        )
     return out
 
 

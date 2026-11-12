@@ -48,11 +48,10 @@ def html_to_pdf(
 def page_count(pdf_path: str | Path) -> int:
     """Best-effort page count via pymupdf; returns ``-1`` if unavailable."""
     try:
-        import fitz
+        import pymupdf as fitz
 
-        doc = fitz.open(str(pdf_path))
-        n = doc.page_count
-        doc.close()
+        with fitz.open(str(pdf_path)) as doc:
+            n = doc.page_count
         return n
     except Exception:  # noqa: BLE001 - best-effort page count
         return -1

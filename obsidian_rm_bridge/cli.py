@@ -21,6 +21,7 @@ from pathlib import Path
 from . import __version__, publisher, retriever, rmapi_client
 from . import config as cfg
 from .config import resolve_key
+from .utils import expand_path
 
 __all__ = ["build_parser", "main"]
 
@@ -93,9 +94,14 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def cmd_publish(args) -> int:
-    path = Path(args.path)
+    path = expand_path(args.path)
     rm_folder = args.rm_folder or cfg.get("remarkable.folder")
-    if args.folder or path.is_dir():
+    if args.folder:
+        if not path.is_dir():
+            _eprint(f"Error: --folder requires a directory, not a file: {path}")
+            return 2
+        publisher.publish_folder(path, rm_folder, dry_run=args.dry_run)
+    elif path.is_dir():
         publisher.publish_folder(path, rm_folder, dry_run=args.dry_run)
     elif path.is_file():
         publisher.publish_page(path, rm_folder, dry_run=args.dry_run)
@@ -138,6 +144,8 @@ def cmd_pull(args) -> int:
     if md_path is None:
         vault = cfg.get("vault.path")
         md_path = str(Path(os.path.expanduser(vault)) / f"{args.page_name}.md")
+    else:
+        md_path = str(expand_path(md_path))
     retriever.retrieve(args.page_name, md_path, rm_folder=args.rm_folder)
     return 0
 
@@ -213,6 +221,9 @@ def cmd_setup(args) -> int:
 
 
 def cmd_pair(args) -> int:
+    if not rmapi_client.find_rmapi():
+        _eprint("rmapi binary not found. Install it with: ormb setup --rmapi")
+        return 1
     return rmapi_client.pair()
 
 

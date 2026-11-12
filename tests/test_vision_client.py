@@ -80,6 +80,18 @@ def test_transcribe_pages_filters_empty(tmp_path):
     assert out == [(1, "Note 1"), (3, "Note 3")]
 
 
+def test_transcribe_pages_continues_on_error(tmp_path):
+    """Adversarial review: a transient API error on one page should not
+    abort the entire pull — other pages should still be transcribed."""
+    pngs = [str(tmp_path / f"p{i}.png") for i in range(3)]
+    for p in pngs:
+        Path(p).write_bytes(b"x")
+    with patch("obsidian_rm_bridge.vision_client.transcribe_page",
+               side_effect=["Note 1", RuntimeError("API timeout"), "Note 3"]):
+        out = vision_client.transcribe_pages(pngs, "fake-key")
+    assert out == [(1, "Note 1"), (3, "Note 3")]
+
+
 def test_cross_verify_returns_both(tmp_path):
     png = tmp_path / "p.png"
     png.write_bytes(b"x")

@@ -13,9 +13,10 @@ def strip_frontmatter(content: str) -> str:
     """Remove a leading YAML frontmatter block (``---\\n...\\n---``) from markdown.
 
     Frontmatter without a closing fence, or content that does not start with
-    ``---``, is returned unchanged.
+    ``---``, is returned unchanged. Handles both LF and CRLF line endings
+    (adversarial review: CRLF support).
     """
-    return re.sub(r'^---\n.*?\n---\n', '', content, count=1, flags=re.DOTALL)
+    return re.sub(r'^---\r?\n.*?\r?\n---\r?\n', '', content, count=1, flags=re.DOTALL)
 
 
 def expand_path(path: str | os.PathLike) -> Path:

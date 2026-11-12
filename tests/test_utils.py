@@ -20,6 +20,14 @@ def test_strip_frontmatter_leaves_unterminated():
     assert strip_frontmatter("---\ntitle: Test\n# Hello\n") == "---\ntitle: Test\n# Hello\n"
 
 
+def test_strip_frontmatter_crlf():
+    """Adversarial review: strip_frontmatter handles CRLF line endings."""
+    content = "---\r\ntitle: Test\r\ntags: [a, b]\r\n---\r\n# Page\r\n\r\nContent.\r\n"
+    result = strip_frontmatter(content)
+    assert "title: Test" not in result
+    assert "# Page" in result
+
+
 def test_expand_path(tmp_path, monkeypatch):
     monkeypatch.setenv("ORB_VAR", "subdir")
     p = expand_path("$ORB_VAR/file.txt")

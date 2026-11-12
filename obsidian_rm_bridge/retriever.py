@@ -32,20 +32,19 @@ def render_pdf_to_pngs(pdf_path: str | os.PathLike, output_dir: str | os.PathLik
 
     Returns a list of PNG file paths, one per page, in page order.
     """
-    import fitz
+    import pymupdf as fitz
 
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
-    doc = fitz.open(str(pdf_path))
-    zoom = dpi / 72.0
-    mat = fitz.Matrix(zoom, zoom)
-    png_paths = []
-    for page_num in range(doc.page_count):
-        pix = doc[page_num].get_pixmap(matrix=mat)
-        png_path = out / f"page_{page_num + 1}.png"
-        pix.save(str(png_path))
-        png_paths.append(str(png_path))
-    doc.close()
+    with fitz.open(str(pdf_path)) as doc:
+        zoom = dpi / 72.0
+        mat = fitz.Matrix(zoom, zoom)
+        png_paths = []
+        for page_num in range(doc.page_count):
+            pix = doc[page_num].get_pixmap(matrix=mat)
+            png_path = out / f"page_{page_num + 1}.png"
+            pix.save(str(png_path))
+            png_paths.append(str(png_path))
     print(f"  Rendered {len(png_paths)} pages to PNG at {dpi} DPI", file=sys.stderr)
     return png_paths
 
