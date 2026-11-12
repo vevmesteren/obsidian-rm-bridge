@@ -88,14 +88,36 @@ def put(pdf_path: str, dest_folder: str, dest_name: str | None = None) -> str:
     rmapi takes the *folder only* as the destination and uses the source
     filename; ``dest_name`` overrides the source filename when needed.
     Returns the destination path ``<dest_folder>/<dest_name>``.
+
+    The destination folder is created if it doesn't exist (Copilot #9).
+    The PDF is staged under ``dest_name`` so rmapi uploads it with the correct
+    filename (Copilot #10) — rmapi uses the *source* filename, not dest_name.
     """
     src = Path(pdf_path)
     if not src.is_file():
         raise RmapiError(f"PDF not found: {pdf_path}")
     if dest_name is None:
         dest_name = src.stem
-    # rmapi put <file> <folder> — uses the source filename automatically.
-    _run(["put", str(src), dest_folder], timeout=120)
+
+    # Ensure the destination folder exists on reMarkable (Copilot #9).
+    # mkdir is idempotent — if the folder already exists rmapi returns an error
+    # we can ignore.
+    try:
+        mkdir(dest_folder)
+    except RmapiError:
+        pass  # Folder likely already exists.
+
+    # Stage the PDF under the dest_name so rmapi uses it as the uploaded
+    # filename (Copilot #10). rmapi names the uploaded document after the
+    # source file, so a random temp name would break pull's lookup.
+    staged = src.parent / f"{dest_name}.pdf"
+    if src.name != staged.name:
+        shutil.copy2(str(src), str(staged))
+    try:
+        _run(["put", str(staged), dest_folder], timeout=120)
+    finally:
+        if src.name != staged.name and staged.exists():
+            staged.unlink()
     return f"{dest_folder.rstrip('/')}/{dest_name}"
 
 

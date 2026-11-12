@@ -79,6 +79,22 @@ def test_rm_invokes_rmapi(tmp_config):
         assert "page" in m.call_args[0][0]
 
 
+def test_rm_resolves_relative_against_configured_folder(tmp_config):
+    """Copilot #2: `ormb rm my-page` should target /Obsidian/my-page, not /my-page."""
+    cli.main(["config", "set", "remarkable.folder", "/MyNotes"])
+    with patch("obsidian_rm_bridge.cli.rmapi_client.rm") as m:
+        assert cli.main(["rm", "my-page"]) == 0
+        path = m.call_args[0][0]
+        assert path == "/MyNotes/my-page"
+
+
+def test_rm_keeps_absolute_path(tmp_config):
+    """Copilot #2: absolute paths (starting with /) are used as-is."""
+    with patch("obsidian_rm_bridge.cli.rmapi_client.rm") as m:
+        assert cli.main(["rm", "/Custom/page"]) == 0
+        assert m.call_args[0][0] == "/Custom/page"
+
+
 def test_pull_missing_page_name_errors(tmp_config):
     assert cli.main(["pull"]) == 2
 
@@ -92,6 +108,26 @@ def test_pull_invokes_retrieve(tmp_config):
 
 def test_publish_missing_path_errors(tmp_config):
     assert cli.main(["publish", "/nonexistent/path.md"]) == 2
+
+
+def test_config_set_masks_api_key(tmp_config, capsys):
+    """Copilot #1: setting openrouter_api_key should mask the value in stderr."""
+    assert cli.main(["config", "set", "vision.openrouter_api_key", "sk-or-v1-secret123"]) == 0
+    err = capsys.readouterr().err
+    assert "sk-or-v1-secret123" not in err
+    assert "***" in err or "****" in err
+
+
+def test_config_init_does_not_overwrite_existing(tmp_config):
+    """Copilot #3: `config init` must not overwrite an existing config file."""
+    from obsidian_rm_bridge import config as cfg
+
+    cfg.set("remarkable.folder", "/MyCustom")
+    cfg.set("vision.model", "custom-model")
+    # init should be idempotent — existing settings preserved
+    cfg.init_config()
+    assert cfg.get("remarkable.folder") == "/MyCustom"
+    assert cfg.get("vision.model") == "custom-model"
 
 
 def test_env_overrides_in_cli(tmp_config, monkeypatch, tmp_path):

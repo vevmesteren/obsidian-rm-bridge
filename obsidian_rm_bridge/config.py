@@ -214,6 +214,11 @@ def init_config(path: str | os.PathLike | None = None) -> Path:
         path = config_path()
     p = Path(os.path.expandvars(os.path.expanduser(str(path))))
     p.parent.mkdir(parents=True, exist_ok=True)
-    with p.open("wb") as f:
-        tomli_w.dump(DEFAULTS, f)
+    # Use 'xb' (exclusive create) — fails if the file already exists (Copilot #3).
+    # The docstring says "overwrites nothing existing"; the code must match.
+    try:
+        with p.open("xb") as f:
+            tomli_w.dump(DEFAULTS, f)
+    except FileExistsError:
+        pass  # Idempotent: leave existing config untouched.
     return p

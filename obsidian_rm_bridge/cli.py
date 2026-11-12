@@ -20,6 +20,7 @@ from pathlib import Path
 
 from . import __version__, publisher, retriever, rmapi_client
 from . import config as cfg
+from .config import resolve_key
 
 __all__ = ["build_parser", "main"]
 
@@ -110,12 +111,18 @@ def cmd_pull(args) -> int:
         vault = cfg.get("vault.path")
         listing = rmapi_client.ls(rm_folder)
         _eprint(listing)
-        # rmapi ls prints one entry per line; pull each that maps to a vault .md.
-        names = [
-            ln.strip().split()[0]
-            for ln in listing.splitlines()
-            if ln.strip() and not ln.strip().startswith("Dir:")
-        ]
+        # rmapi ls format: "[f]\t<name>" for files, "[d]\t<name>" for dirs.
+        # Parse the file marker separately and preserve the full name including
+        # spaces (Copilot #4).
+        names = []
+        for ln in listing.splitlines():
+            ln = ln.strip()
+            if not ln or not ln.startswith("[f]"):
+                continue
+            # Strip the "[f]\t" marker; the rest is the full file name.
+            name = ln[3:].lstrip("\t ").strip()
+            if name:
+                names.append(name)
         for name in names:
             md = Path(os.path.expanduser(vault)) / f"{name}.md"
             if md.is_file():
@@ -138,7 +145,9 @@ def cmd_pull(args) -> int:
 def cmd_config(args) -> int:
     if args.config_cmd == "set":
         cfg.set(args.key, args.value)
-        _eprint(f"Set {args.key} = {args.value}")
+        # Mask secret values in confirmation output (Copilot #1).
+        display = cfg._mask(str(args.value)) if "api_key" in resolve_key(args.key) else args.value
+        _eprint(f"Set {args.key} = {display}")
     elif args.config_cmd == "show":
         print(cfg.show())
     elif args.config_cmd == "init":
@@ -158,14 +167,17 @@ def _rmapi_asset_url() -> tuple[str, str]:
             "rmapi",
         )
     if system == "darwin":
-        arch = "arm64" if machine == "arm64" else "amd64"
+        # ddvk/rmapi publishes macOS assets as ZIP, not tar.gz (Copilot #5).
+        # Asset names: rmapi-macos-arm64.zip, rmapi-macos-intel.zip
+        arch = "arm64" if machine == "arm64" else "intel"
         return (
-            f"https://github.com/ddvk/rmapi/releases/latest/download/rmapi-darwin-{arch}.tar.gz",
+            f"https://github.com/ddvk/rmapi/releases/latest/download/rmapi-macos-{arch}.zip",
             "rmapi",
         )
     if system in ("windows", "win32"):
+        # ddvk/rmapi publishes Windows asset as rmapi-win64.zip (Copilot #5).
         return (
-            "https://github.com/ddvk/rmapi/releases/latest/download/rmapi-windows-amd64.zip",
+            "https://github.com/ddvk/rmapi/releases/latest/download/rmapi-win64.zip",
             "rmapi.exe",
         )
     raise RuntimeError(f"unsupported platform: {system} {machine}")
@@ -211,8 +223,14 @@ def cmd_ls(args) -> int:
 
 
 def cmd_rm(args) -> int:
-    rmapi_client.rm(args.page_name)
-    _eprint(f"Deleted {args.page_name}")
+    # Resolve relative names against the configured folder (Copilot #2).
+    # Absolute paths (starting with /) are used as-is.
+    page = args.page_name
+    if not page.startswith("/"):
+        folder = str(cfg.get("remarkable.folder"))
+        page = f"{folder.rstrip('/')}/{page}"
+    rmapi_client.rm(page)
+    _eprint(f"Deleted {page}")
     return 0
 
 

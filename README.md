@@ -16,8 +16,9 @@ Obsidian .md  ←  transcribed text (vision LLM)  ←  reMarkable
 
 ## Quick Start
 
+### Install
+
 ```bash
-# Install
 pip install obsidian-rm-bridge
 ormb setup          # installs Playwright browser
 ormb setup --rmapi  # downloads rmapi binary
@@ -25,15 +26,41 @@ ormb setup --rmapi  # downloads rmapi binary
 # Pair with reMarkable (one-time)
 ormb pair
 
-# Configure
+# Configure your vault path
 ormb config set vault_path ~/Documents/Obsidian
-ormb config set openrouter_api_key <your-openrouter-api-key>
+```
 
-# Publish a page to reMarkable
+### Publish to reMarkable (no API key needed)
+
+```bash
+# Publish a single page
 ormb publish my-research-notes.md
 
-# Pull handwritten annotations back into the page
+# Publish all .md files in a folder as one combined PDF
+ormb publish my-project/ --folder
+```
+
+That's it — your page is on your reMarkable, ready to annotate.
+
+### Pull annotations back (requires OpenRouter API key)
+
+Annotation transcription uses a vision LLM via [OpenRouter](https://openrouter.ai). You'll need an OpenRouter account and API key.
+
+```bash
+# Set your API key
+ormb config set openrouter_api_key sk-or-v1-xxx
+
+# Pull handwritten annotations back into the source markdown file
 ormb pull my-research-notes
+```
+
+Annotations are appended as:
+
+```markdown
+## Annotations from reMarkable — 2026-11-12
+
+**Page 1:**
+> your handwritten notes transcribed here
 ```
 
 ## Installation
@@ -43,7 +70,7 @@ ormb pull my-research-notes
 | Dependency | Mac | Windows | Linux |
 |------------|-----|---------|-------|
 | Python 3.10+ | `brew install python` | [python.org](https://python.org) | `apt install python3 python3-pip` |
-| rmapi | [ddvk/rmapi releases](https://github.com/ddvk/rmapi/releases) | Same | Same |
+| rmapi | `ormb setup --rmapi` | Same | Same |
 
 ### macOS
 

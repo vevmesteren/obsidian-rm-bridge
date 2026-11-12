@@ -82,7 +82,10 @@ def transcribe_page(
     )
     response.raise_for_status()
     text = response.json()["choices"][0]["message"]["content"].strip()
-    if NO_ANNOTATIONS_MARKER in text.lower():
+    # Use exact match against the sentinel, not substring (Copilot #11).
+    # "No annotations on the previous draft" is real handwriting, not a
+    # no-annotation signal. The prompt asks for exactly "No annotations".
+    if text.lower() == NO_ANNOTATIONS_MARKER:
         return None
     return text
 

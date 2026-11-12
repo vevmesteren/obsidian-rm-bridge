@@ -10,6 +10,7 @@ No veviki or Hermes paths — all configuration comes from :mod:`config` (DC-3).
 from __future__ import annotations
 
 import os
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -30,25 +31,58 @@ __all__ = [
     "wrap_html",
 ]
 
+# Match markdown image syntax: ![alt](relative/path.png)
+_IMG_RE = re.compile(r'!\[([^\]]*)\]\(([^)]+)\)')
+
+
+def _resolve_image_paths(content: str, base_dir: Path) -> str:
+    """Resolve relative image paths to absolute file:// URIs (Copilot #6).
+
+    Absolute paths (starting with / or containing :) are left unchanged.
+    """
+    def _replace(match: re.Match) -> str:
+        alt, src = match.group(1), match.group(2)
+        if src.startswith(("/", "data:")) or "://" in src:
+            return match.group(0)
+        abs_path = (base_dir / src).resolve()
+        return f'![{alt}]({abs_path.as_uri()})'
+
+    return _IMG_RE.sub(_replace, content)
+
 
 def md_to_html(md_path: str | os.PathLike) -> str:
     """Convert a single markdown file to an HTML body string.
 
     Strips YAML frontmatter, renders mermaid blocks to inline PNGs, converts to
-    HTML via python-markdown (tables + fenced_code).
+    HTML via python-markdown (tables + fenced_code). Resolves relative image
+    paths against the source file's directory (Copilot #6).
     """
     import markdown as md_lib
 
-    content = Path(md_path).read_text(encoding="utf-8")
+    md_path = Path(md_path)
+    content = md_path.read_text(encoding="utf-8")
     content = strip_frontmatter(content)
     content = render_mermaid_blocks(content)
+    # Resolve relative image paths to absolute file URIs so Playwright can
+    # load them from about:blank (Copilot #6).
+    content = _resolve_image_paths(content, md_path.parent)
     return md_lib.markdown(content, extensions=["tables", "fenced_code"])
 
 
 def wrap_html(html_body: str, *, title: str = "Obsidian page", css: str | None = None) -> str:
-    """Wrap an HTML body in a full document with the e-ink CSS stylesheet."""
+    """Wrap an HTML body in a full document with the e-ink CSS stylesheet.
+
+    CSS defaults are read from the ``[pdf]`` config section (Copilot #7).
+    """
     if css is None:
-        css = build_css()
+        _fs = get("pdf.font_size")
+        _ff = get("pdf.font_family")
+        _cfs = get("pdf.code_font_size")
+        css = build_css(
+            font_size=int(_fs) if _fs is not None else 14,
+            font_family=str(_ff) if _ff is not None else "Georgia",
+            code_font_size=int(_cfs) if _cfs is not None else 12,
+        )
     return (
         "<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n"
         f"<title>{title}</title>\n<style>\n{css}\n</style>\n</head>\n"
@@ -137,7 +171,9 @@ def publish_page(
         print(f"Published {name} to {dest} on your reMarkable", file=sys.stderr)
         return dest
     finally:
-        if os.path.exists(pdf_path):
+        # Only clean up the temp PDF on non-dry-run paths (Copilot #8).
+        # Dry-run preserves the PDF for user inspection.
+        if not dry_run and os.path.exists(pdf_path):
             os.unlink(pdf_path)
 
 
@@ -164,5 +200,6 @@ def publish_folder(
         print(f"Published {folder_name} to {dest} on your reMarkable", file=sys.stderr)
         return dest
     finally:
-        if os.path.exists(pdf_path):
+        # Only clean up the temp PDF on non-dry-run paths (Copilot #8).
+        if not dry_run and os.path.exists(pdf_path):
             os.unlink(pdf_path)

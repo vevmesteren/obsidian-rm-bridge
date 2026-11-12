@@ -60,6 +60,15 @@ def test_init_config_writes_defaults(tmp_config):
     assert loaded["remarkable"]["folder"] == "/Obsidian"
 
 
+def test_init_config_does_not_overwrite_existing(tmp_config):
+    """Copilot #3: init_config must be idempotent — existing config is preserved."""
+    cfg.set("remarkable.folder", "/Custom")
+    cfg.set("vision.model", "custom-model")
+    cfg.init_config()  # should NOT overwrite
+    assert cfg.get("remarkable.folder") == "/Custom"
+    assert cfg.get("vision.model") == "custom-model"
+
+
 def test_numeric_pdf_coercion(tmp_config):
     cfg.set("pdf.font_size", "18")
     assert cfg.get("pdf.font_size") == 18

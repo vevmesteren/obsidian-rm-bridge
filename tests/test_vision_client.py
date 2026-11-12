@@ -31,6 +31,18 @@ def test_transcribe_page_no_annotations_returns_none(tmp_path):
         assert vision_client.transcribe_page(png, "fake-key") is None
 
 
+def test_transcribe_page_real_text_containing_no_annotations_phrase(tmp_path):
+    """Copilot #11: text containing 'no annotations' as part of a longer
+    sentence is NOT filtered — only the exact sentinel match returns None."""
+    png = tmp_path / "p.png"
+    png.write_bytes(b"fake png")
+    with patch("obsidian_rm_bridge.vision_client.requests.post",
+               return_value=_mock_response("No annotations on the previous draft; review this change.")):
+        result = vision_client.transcribe_page(png, "fake-key")
+        assert result is not None
+        assert "No annotations on the previous draft" in result
+
+
 def test_transcribe_page_sends_default_model(tmp_path):
     png = tmp_path / "p.png"
     png.write_bytes(b"fake png")
