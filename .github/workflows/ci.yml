@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main, feat/v0.1.0-cli]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install uv
+        run: pip install uv
+      - name: Create venv and install (editable, with dev deps)
+        run: |
+          uv venv
+          . .venv/bin/activate
+          uv pip install -e .[dev]
+      - name: Lint (ruff)
+        run: |
+          . .venv/bin/activate
+          ruff check .
+      - name: Install Playwright Chromium
+        run: |
+          . .venv/bin/activate
+          playwright install chromium
+          playwright install-deps chromium
+      - name: Tests (pytest)
+        run: |
+          . .venv/bin/activate
+          pytest tests/ -q
+      - name: Smoke — ormb --help
+        run: |
+          . .venv/bin/activate
+          ormb --help
+          ormb config show

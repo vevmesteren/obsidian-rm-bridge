@@ -27,7 +27,7 @@ ormb pair
 
 # Configure
 ormb config set vault_path ~/Documents/Obsidian
-ormb config set openrouter_api_key sk-or-v1-xxx
+ormb config set openrouter_api_key <your-openrouter-api-key>
 
 # Publish a page to reMarkable
 ormb publish my-research-notes.md
