@@ -37,12 +37,17 @@ _IMG_RE = re.compile(r'!\[([^\]]*)\]\(([^)]+)\)')
 _WIKI_EMBED_RE = re.compile(r'!\[\[([^\]]+)\]\]')
 
 
-def _resolve_image_paths(content: str, base_dir: Path) -> str:
+def _resolve_image_paths(content: str, base_dir: Path, vault_root: Path | None = None) -> str:
     """Resolve relative image paths to absolute file:// URIs (Copilot #6).
 
     Handles both standard markdown ``![alt](src)`` and Obsidian wiki-embed
     ``![[image.png]]`` syntax (adversarial review: wiki-embeds are Obsidian's
     default image syntax). Absolute paths and URLs are left unchanged.
+
+    Standard markdown images are resolved against ``base_dir`` (the note's
+    directory). Obsidian wiki-embeds are resolved against ``vault_root``
+    (the vault root) when provided, because Obsidian resolves wiki links
+    from the vault root by default (Copilot R3-3).
 
     Percent-encoded paths (``My%20diagram.png``) are decoded before resolving
     (Copilot R2-2). Obsidian wiki-embed size suffixes (``![[diagram.png|400]]``)
@@ -50,10 +55,55 @@ def _resolve_image_paths(content: str, base_dir: Path) -> str:
     """
     from urllib.parse import unquote
 
+    def _split_code_blocks(text: str) -> list[tuple[str, bool]]:
+        """Split text into (segment, is_code) pairs (Copilot R3-4).
+
+        Fenced code blocks using ``` or ~~~ are marked as code so image
+        resolution only applies to prose, not examples. Unterminated fences
+        are treated as code to the end (adversarial M1). Tilde fences ~~~
+        are handled (adversarial M2). Inline code (single backticks) is
+        NOT excluded (adversarial M3).
+        """
+        import re as _re
+
+        # Match both ``` and ~~~ fences (adversarial M2)
+        fence_re = _re.compile(r"(```|~~~)")
+
+        parts = fence_re.split(text)
+        segments: list[tuple[str, bool]] = []
+        in_code = False
+        buf: list[str] = []
+        for part in parts:
+            if part in ("```", "~~~"):
+                if not in_code:
+                    if buf:
+                        segments.append(("".join(buf), False))
+                        buf = []
+                    in_code = True
+                    buf.append(part)
+                else:
+                    buf.append(part)
+                    segments.append(("".join(buf), True))
+                    buf = []
+                    in_code = False
+            else:
+                buf.append(part)
+        if buf:
+            segments.append(("".join(buf), in_code))
+        return segments
+
+    def _re_split_title(s: str) -> str:
+        """Strip trailing Markdown image title: url "Title" or url 'Title' (R3-2, M4)."""
+        import re as _re
+
+        return _re.split(r'\s+["\']', s)[0].strip()
+
     def _replace_std(match: re.Match) -> str:
         alt, src = match.group(1), match.group(2)
         if src.startswith(("/", "data:")) or "://" in src:
             return match.group(0)
+        # Strip optional Markdown image title: ![alt](path "Title") or ![alt](path 'Title') (Copilot R3-2, M4)
+        src = _re_split_title(src)
         src = unquote(src)  # decode %20 etc. before resolving (R2-2)
         abs_path = (base_dir / src).resolve()
         return f'![{alt}]({abs_path.as_uri()})'
@@ -65,19 +115,31 @@ def _resolve_image_paths(content: str, base_dir: Path) -> str:
         if src.startswith(("/", "data:")) or "://" in src:
             return match.group(0)
         src = unquote(src)  # decode %20 etc. before resolving (R2-2)
-        abs_path = (base_dir / src).resolve()
+        # Resolve wiki-embeds against vault root, not note dir (Copilot R3-3)
+        resolve_base = vault_root if vault_root is not None else base_dir
+        abs_path = (resolve_base / src).resolve()
         return f'![{src}]({abs_path.as_uri()})'
 
-    content = _WIKI_EMBED_RE.sub(_replace_wiki, content)
-    return _IMG_RE.sub(_replace_std, content)
+    # Apply image resolution only outside fenced code blocks (Copilot R3-4)
+    segments = _split_code_blocks(content)
+    processed = []
+    for seg, is_code in segments:
+        if is_code:
+            processed.append(seg)
+        else:
+            seg = _WIKI_EMBED_RE.sub(_replace_wiki, seg)
+            seg = _IMG_RE.sub(_replace_std, seg)
+            processed.append(seg)
+    return "".join(processed)
 
 
-def md_to_html(md_path: str | os.PathLike) -> str:
+def md_to_html(md_path: str | os.PathLike, vault_root: str | os.PathLike | None = None) -> str:
     """Convert a single markdown file to an HTML body string.
 
     Strips YAML frontmatter, renders mermaid blocks to inline PNGs, converts to
     HTML via python-markdown (tables + fenced_code). Resolves relative image
-    paths against the source file's directory (Copilot #6).
+    paths against the source file's directory (Copilot #6). Wiki-embeds are
+    resolved against ``vault_root`` when provided (Copilot R3-3).
     """
     import markdown as md_lib
 
@@ -86,8 +148,10 @@ def md_to_html(md_path: str | os.PathLike) -> str:
     content = strip_frontmatter(content)
     content = render_mermaid_blocks(content)
     # Resolve relative image paths to absolute file URIs so Playwright can
-    # load them from about:blank (Copilot #6).
-    content = _resolve_image_paths(content, md_path.parent)
+    # load them from about:blank (Copilot #6). Expand ~ in vault_root
+    # before resolving (adversarial C1 — default vault.path is "~/Documents/Obsidian").
+    vr = Path(os.path.expanduser(str(vault_root))).resolve() if vault_root is not None else None
+    content = _resolve_image_paths(content, md_path.parent, vault_root=vr)
     return md_lib.markdown(content, extensions=["tables", "fenced_code"])
 
 
@@ -117,6 +181,7 @@ def md_to_pdf(
     pdf_path: str | os.PathLike,
     *,
     title: str | None = None,
+    vault_root: str | os.PathLike | None = None,
 ) -> str:
     """Convert a single markdown file to PDF (publish_page path).
 
@@ -124,7 +189,7 @@ def md_to_pdf(
     """
     if title is None:
         title = Path(md_path).stem
-    html = wrap_html(md_to_html(md_path), title=title)
+    html = wrap_html(md_to_html(md_path, vault_root=vault_root), title=title)
     html_to_pdf(html, pdf_path, title=title)
     n = page_count(pdf_path)
     size = os.path.getsize(pdf_path)
@@ -135,7 +200,7 @@ def md_to_pdf(
     return str(pdf_path)
 
 
-def folder_to_pdf(folder_path: str | os.PathLike, pdf_path: str | os.PathLike) -> str:
+def folder_to_pdf(folder_path: str | os.PathLike, pdf_path: str | os.PathLike, vault_root: str | os.PathLike | None = None) -> str:
     """Combine all ``.md`` files in ``folder_path`` into one PDF.
 
     Each file becomes one section, ordered by filename, with a page break
@@ -148,7 +213,7 @@ def folder_to_pdf(folder_path: str | os.PathLike, pdf_path: str | os.PathLike) -
 
     sections = []
     for i, md_path in enumerate(md_files):
-        body = md_to_html(md_path)
+        body = md_to_html(md_path, vault_root=vault_root or folder_path)
         if i < len(md_files) - 1:
             sections.append(f'<div class="page-break">\n{body}\n</div>')
         else:
@@ -171,6 +236,7 @@ def publish_page(
     rm_folder: str | None = None,
     *,
     dry_run: bool = False,
+    vault_root: str | os.PathLike | None = None,
 ) -> str:
     """Publish a single markdown page to reMarkable.
 
@@ -179,12 +245,14 @@ def publish_page(
     """
     if rm_folder is None:
         rm_folder = get("remarkable.folder")
+    if vault_root is None:
+        vault_root = get("vault.path")
     name = Path(md_path).stem
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
         pdf_path = f.name
     try:
         print(f"Rendering {md_path} → PDF...", file=sys.stderr)
-        md_to_pdf(md_path, pdf_path, title=name)
+        md_to_pdf(md_path, pdf_path, title=name, vault_root=vault_root)
         if dry_run:
             print(f"[dry-run] skipping upload; PDF at {pdf_path}", file=sys.stderr)
             return f"[dry-run] {rm_folder}/{name}"
@@ -204,16 +272,19 @@ def publish_folder(
     rm_folder: str | None = None,
     *,
     dry_run: bool = False,
+    vault_root: str | os.PathLike | None = None,
 ) -> str:
     """Publish all ``.md`` files in a folder as a combined PDF to reMarkable."""
     if rm_folder is None:
         rm_folder = get("remarkable.folder")
+    if vault_root is None:
+        vault_root = get("vault.path")
     folder_name = Path(folder_path).name or "folder"
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
         pdf_path = f.name
     try:
         print(f"Rendering folder {folder_path} → combined PDF...", file=sys.stderr)
-        folder_to_pdf(folder_path, pdf_path)
+        folder_to_pdf(folder_path, pdf_path, vault_root=vault_root)
         if dry_run:
             print(f"[dry-run] skipping upload; PDF at {pdf_path}", file=sys.stderr)
             return f"[dry-run] {rm_folder}/{folder_name}"

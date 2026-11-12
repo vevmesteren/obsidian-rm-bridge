@@ -92,3 +92,34 @@ def test_retrieve_no_annotations(tmp_path, tmp_config):
         section = retriever.retrieve("page", md, rm_folder="/Obsidian", api_key="k")
     assert "No annotations found" in section
     assert "## Annotations from reMarkable" in md.read_text()
+
+
+def test_format_annotations_multiline_quote():
+    """Copilot R3-5: every line of a multiline transcription gets > prefix."""
+    text = "Line one\n\nLine two\n- bullet"
+    out = retriever.format_annotations([(1, text)], date_str="2026-11-12")
+    lines = out.strip().splitlines()
+    # Every non-empty line in the annotation section after the header should start with >
+    in_annotation = False
+    for line in lines:
+        if "Line one" in line:
+            in_annotation = True
+        if in_annotation and line.strip():
+            assert line.startswith(">"), f"Unquoted line: {line!r}"
+
+
+def test_retrieve_missing_source_raises(tmp_path, tmp_config):
+    """Copilot R3-6: missing source note should raise FileNotFoundError,
+    not silently create an empty annotations-only file."""
+    missing = tmp_path / "nonexistent.md"
+    assert not missing.exists()
+    import pytest
+    with patch("obsidian_rm_bridge.retriever.rmapi_client.refresh"), \
+         patch("obsidian_rm_bridge.retriever.rmapi_client.geta", return_value="/tmp/fake.pdf"), \
+         patch("obsidian_rm_bridge.retriever.render_pdf_to_pngs", return_value=["/tmp/p1.png"]), \
+         patch("obsidian_rm_bridge.retriever.vision_client.transcribe_pages",
+               return_value=[(1, "Note")]), \
+         pytest.raises(FileNotFoundError, match="Source note not found"):
+        retriever.retrieve("page", missing, rm_folder="/Obsidian", api_key="k")
+    # File should NOT have been created
+    assert not missing.exists()

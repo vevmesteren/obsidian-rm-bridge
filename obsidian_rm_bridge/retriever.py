@@ -67,7 +67,9 @@ def format_annotations(annotations: list, *, date_str: str | None = None) -> str
     sections = [header]
     for page_num, text in annotations:
         sections.append(f"\n**Page {page_num}:**\n")
-        sections.append(f"> {text}\n")
+        # Prefix every line with > so multiline annotations stay in the blockquote (Copilot R3-5)
+        quoted = "\n".join(f"> {line}" if line else ">" for line in text.splitlines())
+        sections.append(f"{quoted}\n")
     return "\n".join(sections) + "\n"
 
 
@@ -105,6 +107,14 @@ def retrieve(
         vault = get("vault.path")
         md = Path(os.path.expanduser(vault)) / md
     md_path = str(md)
+
+    # Reject missing source notes before downloading (Copilot R3-6).
+    # Without this, append_annotations creates an empty file and reports success.
+    if not Path(md_path).is_file():
+        raise FileNotFoundError(
+            f"Source note not found: {md_path}. "
+            f"Use --md to specify the correct path."
+        )
 
     rm_path = f"{rm_folder.rstrip('/')}/{page_name}"
     with tempfile.TemporaryDirectory() as tmpdir:

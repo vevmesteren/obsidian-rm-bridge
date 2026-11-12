@@ -129,8 +129,9 @@ def cmd_pull(args) -> int:
             name = ln[3:].lstrip("\t ").strip()
             if name:
                 names.append(name)
+        vault_resolved = Path(os.path.expanduser(vault)).resolve()
         for name in names:
-            md = Path(os.path.expanduser(vault)) / f"{name}.md"
+            md = vault_resolved / f"{name}.md"
             if md.is_file():
                 retriever.retrieve(name, md, rm_folder=rm_folder)
             else:
@@ -143,7 +144,7 @@ def cmd_pull(args) -> int:
     md_path = args.md_path
     if md_path is None:
         vault = cfg.get("vault.path")
-        md_path = str(Path(os.path.expanduser(vault)) / f"{args.page_name}.md")
+        md_path = str(Path(os.path.expanduser(vault)).resolve() / f"{args.page_name}.md")
     else:
         md_path = str(expand_path(md_path))
     retriever.retrieve(args.page_name, md_path, rm_folder=args.rm_folder)

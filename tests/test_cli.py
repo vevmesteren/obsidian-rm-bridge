@@ -139,3 +139,26 @@ def test_env_overrides_in_cli(tmp_config, monkeypatch, tmp_path):
         assert cli.main(["publish", str(md)]) == 0
         # publish_page was called with the env-derived rm_folder
         assert m.call_args[0][1] == "/EnvFolder"
+
+
+def test_pull_default_md_resolves_relative_vault(tmp_config, tmp_path, monkeypatch):
+    """Copilot R3-1: with a relative vault.path, pull should resolve to absolute
+    before passing to retrieve(), avoiding double-prefixing (adversarial W2)."""
+    from pathlib import Path
+
+    # Set up a genuinely relative vault.path (adversarial W2)
+    from obsidian_rm_bridge import config as cfg
+    vault_dir = tmp_path / "notes"
+    vault_dir.mkdir()
+    (vault_dir / "my-page.md").write_text("# My Page\n\nContent.\n")
+    monkeypatch.chdir(tmp_path)
+    cfg.set("vault.path", "notes")  # relative, not absolute
+
+    with patch("obsidian_rm_bridge.cli.retriever.retrieve") as m_ret:
+        cli.main(["pull", "my-page"])
+        called_md = m_ret.call_args[0][1]
+        called_path = Path(called_md)
+        assert called_path.is_absolute()
+        # Must resolve to tmp_path/notes/my-page.md, not notes/notes/my-page.md
+        assert called_path.name == "my-page.md"
+        assert "notes/notes" not in called_md

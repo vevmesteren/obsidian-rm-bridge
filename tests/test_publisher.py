@@ -93,6 +93,77 @@ def test_publish_page_failure_propagates(tmp_path):
         publisher.publish_page(md, rm_folder="/Obsidian")
 
 
+# --- image path resolution (Copilot R2/R3) ---------------------------------
+
+
+def test_resolve_image_paths_strips_markdown_title(tmp_path):
+    """Copilot R3-2: ![alt](path "Title") should resolve 'path', not 'path "Title"'."""
+    img = tmp_path / "figure.png"
+    img.write_bytes(b"x")
+    md_content = '![Figure](figure.png "Caption")'
+    result = publisher._resolve_image_paths(md_content, tmp_path)
+    assert "figure.png" in result
+    assert "%22" not in result  # no percent-encoded quotes from title
+
+
+def test_resolve_image_paths_strips_single_quote_title(tmp_path):
+    """Adversarial M4: ![alt](path 'Title') should also strip the title."""
+    img = tmp_path / "figure.png"
+    img.write_bytes(b"x")
+    md_content = "![Figure](figure.png 'Caption')"
+    result = publisher._resolve_image_paths(md_content, tmp_path)
+    assert "figure.png" in result
+    assert "%27" not in result  # no percent-encoded single quotes from title
+
+
+def test_resolve_wiki_embeds_against_vault_root(tmp_path):
+    """Copilot R3-3: ![[Attachments/chart.png]] from vault/Projects/ should
+    resolve against vault root, not note directory."""
+    vault = tmp_path
+    (vault / "Attachments").mkdir()
+    (vault / "Attachments" / "chart.png").write_bytes(b"x")
+    (vault / "Projects").mkdir()
+    md_content = "![[Attachments/chart.png]]"
+    result = publisher._resolve_image_paths(
+        md_content, vault / "Projects", vault_root=vault
+    )
+    assert "Attachments/chart.png" in result
+    # Should NOT contain Projects/Attachments
+    assert "Projects/Attachments" not in result
+
+
+def test_resolve_image_paths_skips_code_blocks(tmp_path):
+    """Copilot R3-4: image syntax inside fenced code blocks should not be rewritten."""
+    img = tmp_path / "real.png"
+    img.write_bytes(b"x")
+    md_content = (
+        "![Real](real.png)\n\n"
+        "```markdown\n"
+        "![Example](example.png)\n"
+        "```\n"
+    )
+    result = publisher._resolve_image_paths(md_content, tmp_path)
+    # The real image should be resolved to an absolute URI (exactly one file://)
+    assert result.count("file://") == 1, "code-block image was rewritten"
+    # The example inside code block should be unchanged
+    assert "![Example](example.png)" in result
+
+
+def test_resolve_image_paths_skips_tilde_fenced(tmp_path):
+    """Adversarial M2: image syntax inside ~~~ fences should not be rewritten."""
+    img = tmp_path / "real.png"
+    img.write_bytes(b"x")
+    md_content = (
+        "![Real](real.png)\n\n"
+        "~~~markdown\n"
+        "![Tilde](tilde_img.png)\n"
+        "~~~\n"
+    )
+    result = publisher._resolve_image_paths(md_content, tmp_path)
+    assert result.count("file://") == 1, "tilde-fenced image was rewritten"
+    assert "![Tilde](tilde_img.png)" in result
+
+
 # --- real Playwright rendering (skipped if no browser) ---------------------
 
 
