@@ -1,0 +1,58 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "obsidian-rm-bridge"
+version = "0.1.0"
+description = "Publish Obsidian markdown to reMarkable, annotate by hand, pull handwriting back into your vault"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [{name = "Valentin Backofen", email = "vevmesteren@users.noreply.github.com"}]
+keywords = ["remarkable", "obsidian", "annotations", "e-ink", "vision", "llm"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Text Processing :: Markup :: Markdown",
+]
+dependencies = [
+    "playwright>=1.40",
+    "markdown>=3.5",
+    "pymupdf>=1.24",
+    "requests>=2.31",
+    "tomli>=2.0;python_version<'3.11'",
+    "tomli-w>=1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.4",
+]
+
+[project.scripts]
+ormb = "obsidian_rm_bridge.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/vevmesteren/obsidian-rm-bridge"
+Repository = "https://github.com/vevmesteren/obsidian-rm-bridge"
+Issues = "https://github.com/vevmesteren/obsidian-rm-bridge/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["obsidian_rm_bridge*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
