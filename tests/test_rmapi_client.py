@@ -81,12 +81,14 @@ def test_put_stages_pdf_under_dest_name(tmp_path):
     pdf.write_bytes(b"%PDF-1.4")
     with patch("obsidian_rm_bridge.rmapi_client.subprocess.run", return_value=_ok()) as m:
         rmapi_client.put(str(pdf), "/Obsidian", dest_name="my-page")
-        put_cmd = [c for c in m.call_args[0][0] if c == "put"]
-        assert put_cmd  # put was called
-        # The file passed to rmapi put should be named my-page.pdf, not tmp_random_name.pdf
-        put_args = m.call_args[0][0]
-        uploaded_file = put_args[2]  # rmapi put <file> <folder>
+        # Find the put command (not mkdir)
+        put_calls = [call for call in m.call_args_list if call.args[0][1] == "put"]
+        assert put_calls
+        uploaded_file = put_calls[0].args[0][2]
         assert "my-page.pdf" in uploaded_file
+        # Adversarial I5: verify staging uses a unique temp directory
+        from pathlib import Path
+        assert Path(uploaded_file).parent.name.startswith("ormb-stage-")
 
 
 def test_put_dest_name_override(tmp_path):

@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import sys
+
+import pytest
+
 from obsidian_rm_bridge import config as cfg
 
 
@@ -67,6 +71,26 @@ def test_init_config_does_not_overwrite_existing(tmp_config):
     cfg.init_config()  # should NOT overwrite
     assert cfg.get("remarkable.folder") == "/Custom"
     assert cfg.get("vision.model") == "custom-model"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Unix file permissions")
+def test_config_file_permissions_are_owner_only(tmp_config):
+    """Copilot R2-1: config file must have 0600 permissions to protect API keys."""
+    import os
+    cfg.set("vision.openrouter_api_key", "sk-secret")
+    cfg_path = cfg.config_path()
+    mode = oct(os.stat(cfg_path).st_mode & 0o777)
+    assert mode == "0o600", f"config file is {mode}, expected 0o600"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Unix file permissions")
+def test_init_config_permissions_are_owner_only(tmp_config):
+    """Adversarial I4: init_config must also create with 0600."""
+    import os
+    cfg.init_config()
+    cfg_path = cfg.config_path()
+    mode = oct(os.stat(cfg_path).st_mode & 0o777)
+    assert mode == "0o600", f"config file is {mode}, expected 0o600"
 
 
 def test_numeric_pdf_coercion(tmp_config):

@@ -185,7 +185,11 @@ def set(key: str, value: str, path: str | os.PathLike | None = None) -> None:
         except (ValueError, TypeError):
             pass
     _set_nested(data, dotted, value)
-    with p.open("wb") as f:
+    # Write with owner-only permissions (0600) to protect API keys
+    # from other local users (Copilot R2-1). Use os.open with the mode
+    # at creation time to avoid a TOCTOU race (adversarial I1).
+    fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "wb") as f:
         tomli_w.dump(data, f)
 
 
@@ -217,7 +221,8 @@ def init_config(path: str | os.PathLike | None = None) -> Path:
     # Use 'xb' (exclusive create) — fails if the file already exists (Copilot #3).
     # The docstring says "overwrites nothing existing"; the code must match.
     try:
-        with p.open("xb") as f:
+        fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "wb") as f:
             tomli_w.dump(DEFAULTS, f)
     except FileExistsError:
         pass  # Idempotent: leave existing config untouched.

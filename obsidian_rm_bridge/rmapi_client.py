@@ -10,6 +10,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 __all__ = [
@@ -110,14 +111,12 @@ def put(pdf_path: str, dest_folder: str, dest_name: str | None = None) -> str:
     # Stage the PDF under the dest_name so rmapi uses it as the uploaded
     # filename (Copilot #10). rmapi names the uploaded document after the
     # source file, so a random temp name would break pull's lookup.
-    staged = src.parent / f"{dest_name}.pdf"
-    if src.name != staged.name:
+    # Use a unique temp directory to avoid overwriting existing files
+    # in the shared temp dir (Copilot R2-4).
+    with tempfile.TemporaryDirectory(prefix="ormb-stage-") as stage_dir:
+        staged = Path(stage_dir) / f"{dest_name}.pdf"
         shutil.copy2(str(src), str(staged))
-    try:
         _run(["put", str(staged), dest_folder], timeout=120)
-    finally:
-        if src.name != staged.name and staged.exists():
-            staged.unlink()
     return f"{dest_folder.rstrip('/')}/{dest_name}"
 
 

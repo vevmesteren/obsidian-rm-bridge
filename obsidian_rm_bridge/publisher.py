@@ -43,19 +43,28 @@ def _resolve_image_paths(content: str, base_dir: Path) -> str:
     Handles both standard markdown ``![alt](src)`` and Obsidian wiki-embed
     ``![[image.png]]`` syntax (adversarial review: wiki-embeds are Obsidian's
     default image syntax). Absolute paths and URLs are left unchanged.
+
+    Percent-encoded paths (``My%20diagram.png``) are decoded before resolving
+    (Copilot R2-2). Obsidian wiki-embed size suffixes (``![[diagram.png|400]]``)
+    are stripped before resolving (Copilot R2-3).
     """
+    from urllib.parse import unquote
 
     def _replace_std(match: re.Match) -> str:
         alt, src = match.group(1), match.group(2)
         if src.startswith(("/", "data:")) or "://" in src:
             return match.group(0)
+        src = unquote(src)  # decode %20 etc. before resolving (R2-2)
         abs_path = (base_dir / src).resolve()
         return f'![{alt}]({abs_path.as_uri()})'
 
     def _replace_wiki(match: re.Match) -> str:
         src = match.group(1)
+        # Strip Obsidian size/alias suffix: ![[diagram.png|400]] → diagram.png (R2-3)
+        src = src.split("|")[0]
         if src.startswith(("/", "data:")) or "://" in src:
             return match.group(0)
+        src = unquote(src)  # decode %20 etc. before resolving (R2-2)
         abs_path = (base_dir / src).resolve()
         return f'![{src}]({abs_path.as_uri()})'
 

@@ -9,6 +9,7 @@ second model and cross-verify (DC-9).
 from __future__ import annotations
 
 import base64
+import sys
 from pathlib import Path
 
 import requests
@@ -107,6 +108,15 @@ def transcribe_pages(
     All pages are sent to the model — no pre-filtering by drawing count (DC-6).
     A transient API error on one page does not abort the entire run
     (adversarial review: per-page try/except, continue, log).
+
+    Raises ``RuntimeError`` when every page failed and no annotations were
+    returned, so the caller can distinguish a total failure from a genuine
+    no-annotation result (Copilot R2-5).
+
+    Note (adversarial I7): if some pages fail and the survivors all return
+    ``None``, the result is ``[]`` — identical to a genuine no-annotation
+    result. The stderr warning is the only signal of partial failure in
+    this case.
     """
     out = []
     failed = []
@@ -114,7 +124,7 @@ def transcribe_pages(
         try:
             text = transcribe_page(png_path, api_key, model=model)
         except Exception as exc:  # noqa: BLE001 — degrade gracefully per page
-            print(f"  Warning: page {i} transcription failed: {exc}", file=__import__("sys").stderr)
+            print(f"  Warning: page {i} transcription failed: {exc}", file=sys.stderr)
             failed.append(i)
             continue
         if text:
@@ -122,7 +132,12 @@ def transcribe_pages(
     if failed:
         print(
             f"  {len(failed)} page(s) failed: {', '.join(str(p) for p in failed)}",
-            file=__import__("sys").stderr,
+            file=sys.stderr,
+        )
+    if png_paths and not out and failed and len(failed) == len(png_paths):
+        raise RuntimeError(
+            f"All {len(failed)} page(s) failed transcription — no annotations retrieved. "
+            f"Check API key and network connectivity."
         )
     return out
 

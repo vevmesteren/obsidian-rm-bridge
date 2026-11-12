@@ -183,9 +183,11 @@ def _rmapi_asset_url() -> tuple[str, str]:
             "rmapi",
         )
     if system in ("windows", "win32"):
-        # ddvk/rmapi publishes Windows asset as rmapi-win64.zip (Copilot #5).
+        # ddvk/rmapi publishes Windows assets as ZIP (Copilot #5).
+        # Include ARM64 support (adversarial I2).
+        arch = "win-arm64" if machine in ("arm64", "aarch64") else "win64"
         return (
-            "https://github.com/ddvk/rmapi/releases/latest/download/rmapi-win64.zip",
+            f"https://github.com/ddvk/rmapi/releases/latest/download/rmapi-{arch}.zip",
             "rmapi.exe",
         )
     raise RuntimeError(f"unsupported platform: {system} {machine}")
@@ -209,7 +211,11 @@ def cmd_setup(args) -> int:
                     z.extractall(tmp)
             else:
                 with tarfile.open(archive) as t:
-                    t.extractall(tmp)
+                    # Use filter="data" for path-traversal protection (adversarial I8).
+                    try:
+                        t.extractall(tmp, filter="data")
+                    except TypeError:
+                        t.extractall(tmp)
             src = Path(tmp) / bin_name
             shutil.copy2(src, dest / bin_name)
             os.chmod(dest / bin_name, 0o755)

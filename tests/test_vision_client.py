@@ -92,6 +92,19 @@ def test_transcribe_pages_continues_on_error(tmp_path):
     assert out == [(1, "Note 1"), (3, "Note 3")]
 
 
+def test_transcribe_pages_all_failed_raises(tmp_path):
+    """Copilot R2-5: if every page fails, raise RuntimeError so the caller
+    can distinguish total failure from genuine no-annotations."""
+    pngs = [str(tmp_path / f"p{i}.png") for i in range(3)]
+    for p in pngs:
+        Path(p).write_bytes(b"x")
+    with patch("obsidian_rm_bridge.vision_client.transcribe_page",
+               side_effect=[RuntimeError("API error"), RuntimeError("API error"), RuntimeError("API error")]):
+        import pytest
+        with pytest.raises(RuntimeError, match="All 3 page.*failed"):
+            vision_client.transcribe_pages(pngs, "fake-key")
+
+
 def test_cross_verify_returns_both(tmp_path):
     png = tmp_path / "p.png"
     png.write_bytes(b"x")
