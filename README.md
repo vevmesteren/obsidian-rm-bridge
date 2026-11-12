@@ -39,6 +39,10 @@ ormb config set vault.path ~/Documents/Obsidian
 
 <!-- Once published to PyPI, the above can be replaced with `pip install obsidian-rm-bridge` -->
 
+> **WSL/Ubuntu users:** If `python3 -m venv .venv` fails with "ensurepip not available",
+> install the venv package for your Python version, e.g. `sudo apt install python3.10-venv`,
+> then recreate the venv.
+
 ### Publish to reMarkable (no API key needed)
 
 ```bash
@@ -107,7 +111,8 @@ wsl --install -d Ubuntu
 ### Linux
 
 ```bash
-sudo apt install python3 python3-pip python3-venv
+# Install Python + venv support (venv package is separate on Debian/Ubuntu)
+sudo apt install python3 python3-pip python3-venv python3.10-venv
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
 ormb setup --rmapi
