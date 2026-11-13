@@ -5,7 +5,7 @@
 // secrets. Setup/pair/set-key stay terminal-only and are surfaced here as
 // copyable commands.
 
-import { createDiv, Notice, PluginSettingTab, Setting } from "obsidian";
+import { Notice, PluginSettingTab, Setting } from "obsidian";
 import type ObsidianRmBridgePlugin from "./main.ts";
 import type { DoctorResult } from "./types.ts";
 
@@ -51,12 +51,14 @@ function renderStatusGrid(container: HTMLElement, doc: DoctorResult): void {
 }
 
 export class OrmbSettingsTab extends PluginSettingTab {
+  declare plugin: ObsidianRmBridgePlugin;
   private statusHost: HTMLElement;
 
   constructor(app: import("obsidian").App, plugin: ObsidianRmBridgePlugin) {
     super(app, plugin);
     this.plugin = plugin;
-    this.statusHost = createDiv({ cls: "ormb-status-grid" });
+    this.statusHost = document.createElement("div");
+    this.statusHost.className = "ormb-status-grid";
   }
 
   display(): void {

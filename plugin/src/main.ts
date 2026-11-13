@@ -5,7 +5,7 @@
 // inside WSL home. Every CLI invocation goes through an ExecutionAdapter that
 // launches `wsl.exe --exec` with argv only — never a shell.
 
-import { Notice, Plugin, type TFile } from "obsidian";
+import { Notice, Plugin, TFile } from "obsidian";
 import { WslAdapter, type AppRef } from "./wsl-adapter.ts";
 import { VaultBridge } from "./vault.ts";
 import {
@@ -75,6 +75,7 @@ export default class ObsidianRmBridgePlugin extends Plugin {
 
     this.registerEvent(
       this.app.workspace.on("file-menu", (menu, file) => {
+        if (!(file instanceof TFile)) return;
         menu.addItem((item) => {
           item
             .setTitle("Publish to reMarkable")

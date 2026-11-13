@@ -10,6 +10,7 @@
     "forceConsistentCasingInFileNames": true,
     "declaration": false,
     "noEmit": true,
+    "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "resolveJsonModule": true,
     "types": ["node"]
