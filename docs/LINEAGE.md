@@ -1,5 +1,7 @@
 # Lineage
 
+[LINEAGE_COMPLETE]
+
 ## Origin
 
 `obsidian-rm-bridge` is the open-source extraction of the **veviki-remarkable-bridge** — a Hermes Agent skill built by Valentin Backofen (vevmesteren) in November 2026.
