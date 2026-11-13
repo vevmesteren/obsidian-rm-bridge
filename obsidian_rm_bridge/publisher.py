@@ -259,7 +259,7 @@ def publish_page(
         from .pdf_renderer import page_count as _page_count
         try:
             _pages = _page_count(pdf_path)
-        except Exception:
+        except Exception:  # noqa: BLE001 — best-effort page count
             _pages = 0
         if dry_run:
             print(f"[dry-run] skipping upload; PDF at {pdf_path}", file=sys.stderr)
@@ -297,7 +297,7 @@ def publish_folder(
         from .pdf_renderer import page_count as _page_count
         try:
             _pages = _page_count(pdf_path)
-        except Exception:
+        except Exception:  # noqa: BLE001 — best-effort page count
             _pages = 0
         if dry_run:
             print(f"[dry-run] skipping upload; PDF at {pdf_path}", file=sys.stderr)

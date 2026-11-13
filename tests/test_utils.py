@@ -4,7 +4,13 @@ from __future__ import annotations
 
 import pytest
 
-from obsidian_rm_bridge.utils import ensure_dir, expand_path, expand_user_path, list_md_files, strip_frontmatter
+from obsidian_rm_bridge.utils import (
+    ensure_dir,
+    expand_path,
+    expand_user_path,
+    list_md_files,
+    strip_frontmatter,
+)
 
 
 def test_strip_frontmatter():

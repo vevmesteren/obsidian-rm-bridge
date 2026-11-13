@@ -60,7 +60,7 @@ def _make_route_handler(vault_root: Path | None = None):
             route.continue_()
             return
         if url.startswith("file://") and vault_root is not None:
-            from urllib.parse import urlparse, unquote
+            from urllib.parse import unquote, urlparse
 
             parsed = urlparse(url)
             local = Path(unquote(parsed.path))

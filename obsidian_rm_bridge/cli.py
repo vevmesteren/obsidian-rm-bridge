@@ -23,7 +23,7 @@ from pathlib import Path
 from . import __version__, publisher, retriever, rmapi_client
 from . import config as cfg
 from .config import resolve_key
-from .utils import expand_path, expand_user_path
+from .utils import expand_user_path
 
 __all__ = ["build_parser", "main"]
 
@@ -57,7 +57,6 @@ def _classify_error(e: Exception) -> str:
         return "note_not_found"
     msg = str(e).lower()
     # rmapi errors first (RmapiError is a RuntimeError subclass).
-    from .rmapi_client import RmapiError
     if isinstance(e, RmapiError):
         if "binary not found" in msg:
             return "rmapi_missing"
@@ -208,7 +207,7 @@ def cmd_publish(args) -> int:
                 else:
                     _eprint(f"Error: {msg}")
                 return 1
-        except Exception:  # noqa: BLE001 — don't block publish on ls failure
+        except Exception:  # noqa: BLE001, S110 — don't block publish on ls failure
             pass
 
     try:
@@ -476,7 +475,7 @@ def cmd_doctor(args) -> int:
     if rmapi_found:
         try:
             result = subprocess.run(
-                [rmapi_path, "--version"], capture_output=True, text=True, timeout=10)
+                [rmapi_path, "--version"], check=False, capture_output=True, text=True, timeout=10)
             rmapi_version = (result.stdout or result.stderr or "").strip()
         except Exception:  # noqa: BLE001
             rmapi_version = "unknown"
