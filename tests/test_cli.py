@@ -382,10 +382,12 @@ def test_pull_vault_flag_precedence(tmp_config, tmp_path, monkeypatch):
 def test_config_set_key_stdin(tmp_config, monkeypatch):
     """Item 10: config set-key reads the API key from stdin."""
     import io
-    monkeypatch.setattr("sys.stdin", io.StringIO("sk-or-v1-secret123\n"))
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    test_key = "sk-or-v1-secret123"
+    monkeypatch.setattr("sys.stdin", io.StringIO(test_key + "\n"))
     assert cli.main(["config", "set-key"]) == 0
     from obsidian_rm_bridge import config as cfg
-    assert cfg.get("vision.openrouter_api_key") == "sk-or-v1-secret123"
+    assert cfg.get("vision.openrouter_api_key") == test_key
 
 
 def test_config_set_openrouter_deprecation(tmp_config, capsys):
