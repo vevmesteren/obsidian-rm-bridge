@@ -66,10 +66,20 @@ Annotation transcription uses a vision LLM via [OpenRouter](https://openrouter.a
 
 ```bash
 # Set your API key
-ormb config set openrouter_api_key sk-or-v1-xxx
+ormb config set openrouter_api_key sk-or-v1-your-key-here
 
-# Pull handwritten annotations back into the source markdown file
-ormb pull my-research-notes
+# List what's on your reMarkable to find the page name
+ormb ls
+
+# Pull annotations — the page name is the reMarkable document name
+# (the .md file stem from publish, e.g. "c4-system-landscape")
+ormb pull c4-system-landscape
+
+# If the source .md is in a subdirectory, use --md to specify it:
+ormb pull c4-system-landscape --md concepts/architecture/c4-system-landscape.md
+
+# Or pull all annotated pages from your reMarkable folder:
+ormb pull --all
 ```
 
 Annotations are appended as:
@@ -131,7 +141,8 @@ ormb setup          # installs Chromium + system libs (libgbm, libnss, etc.)
 |---------|-------------|
 | `ormb publish <file>` | Publish a single markdown page to reMarkable |
 | `ormb publish <folder> --folder` | Publish all .md files as a combined PDF |
-| `ormb pull <page-name>` | Download, transcribe annotations, append to source .md |
+| `ormb pull <page-name>` | Pull annotations from reMarkable (page-name = .md stem, e.g. `c4-system-landscape`) |
+| `ormb pull <page-name> --md <path>` | Same, but specify the source .md file (for subdirectory notes) |
 | `ormb pull --all` | Pull all annotated pages from your reMarkable folder |
 | `ormb ls` | List files on reMarkable |
 | `ormb rm <page-name>` | Delete a file on reMarkable |
