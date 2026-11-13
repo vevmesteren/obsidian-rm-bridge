@@ -20,7 +20,7 @@ from .config import get
 from .css import build_css
 from .mermaid_renderer import render_mermaid_blocks
 from .pdf_renderer import html_to_pdf, page_count
-from .utils import list_md_files, strip_frontmatter
+from .utils import list_md_files, strip_frontmatter, strip_marker_blocks
 
 __all__ = [
     "folder_to_pdf",
@@ -149,6 +149,9 @@ def md_to_html(md_path: str | os.PathLike, vault_root: str | os.PathLike | None 
     md_path = Path(md_path)
     content = md_path.read_text(encoding="utf-8")
     content = strip_frontmatter(content)
+    # Strip pulled-annotation marker blocks before rendering so they don't
+    # round-trip into the published PDF (Phase 5b feedback loop, ARB R4).
+    content = strip_marker_blocks(content)
     content = render_mermaid_blocks(content, vault_root=str(vault_root) if vault_root is not None else None)
     # Resolve relative image paths to absolute file URIs so Playwright can
     # load them from about:blank (Copilot #6). Expand ~ in vault_root

@@ -28,12 +28,27 @@ export interface OrmbPublishData {
   pages: number;
 }
 
+/** One section from `ormb pull --emit json`: a page number + its transcribed text. */
+export interface OrmbPullSection {
+  page: number;
+  text: string;
+}
+
+/** Data payload returned by `ormb pull --emit json` on success. */
+export interface OrmbPullData {
+  sections: OrmbPullSection[];
+  doc_id: string;
+  rev: string;
+  total_pages: number;
+  annotated_pages: number;
+}
+
 /** JSON result envelope emitted by the CLI on stdout when `--json` is passed. */
 export interface OrmbResult {
   ok: boolean;
   code: string;
   message: string;
-  data: OrmbPublishData | null;
+  data: OrmbPublishData | OrmbPullData | null;
 }
 
 /** JSON envelope emitted by `ormb doctor --json`. */
@@ -55,6 +70,7 @@ export interface DoctorResult {
  */
 export interface ExecutionAdapter {
   spawn(args: string[]): Promise<OrmbResult>;
+  spawn(args: string[], onStderr?: (line: string) => void): Promise<OrmbResult>;
   doctor(): Promise<DoctorResult>;
   translateVaultRoot(windowsPath: string): string;
 }
@@ -67,4 +83,6 @@ export interface OrmbSettings {
   rmFolder: string;
   visionModel: string;
   automountRoot: string;
+  /** First-run consent for the pull path (OpenRouter egress). Sticky once true. */
+  pullConsentGiven: boolean;
 }

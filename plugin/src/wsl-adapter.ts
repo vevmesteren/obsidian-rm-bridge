@@ -77,8 +77,8 @@ export class WslAdapter implements ExecutionAdapter {
     return buildArgv(this.config, args);
   }
 
-  spawn(args: string[]): Promise<OrmbResult> {
-    return this.spawnRaw(args).then((o) => this.toOrmbResult(o));
+  spawn(args: string[], onStderr?: (line: string) => void): Promise<OrmbResult> {
+    return this.spawnRaw(args, onStderr).then((o) => this.toOrmbResult(o));
   }
 
   async doctor(): Promise<DoctorResult> {
@@ -121,7 +121,10 @@ export class WslAdapter implements ExecutionAdapter {
 
   // --- internals ---------------------------------------------------------
 
-  private spawnRaw(args: readonly string[]): Promise<RawOutcome> {
+  private spawnRaw(
+    args: readonly string[],
+    onStderr?: (line: string) => void,
+  ): Promise<RawOutcome> {
     return new Promise((resolve) => {
       const argv = buildArgv(this.config, args);
       const env: Record<string, string | undefined> = {
@@ -148,12 +151,25 @@ export class WslAdapter implements ExecutionAdapter {
 
       let stdout = "";
       let stderr = "";
+      // Partial stderr line held across chunks so a line is only emitted once
+      // its trailing newline has arrived (best-effort status bar).
+      let stderrPending = "";
 
       child.stdout?.on("data", (d: Buffer) => {
         stdout += d.toString("utf-8");
       });
       child.stderr?.on("data", (d: Buffer) => {
-        stderr += d.toString("utf-8");
+        const chunk = d.toString("utf-8");
+        stderr += chunk;
+        if (onStderr) {
+          stderrPending += chunk;
+          const lines = stderrPending.split("\n");
+          // Last element is the in-progress partial (possibly "").
+          stderrPending = lines.pop() ?? "";
+          for (const line of lines) {
+            if (line.length > 0) onStderr(line);
+          }
+        }
       });
 
       child.on("error", (err: Error) => {
@@ -169,6 +185,11 @@ export class WslAdapter implements ExecutionAdapter {
 
       child.on("close", (code: number | null) => {
         this.child = null;
+        // Flush any trailing stderr line that never got a newline.
+        if (onStderr && stderrPending.length > 0) {
+          onStderr(stderrPending);
+          stderrPending = "";
+        }
         let raw: unknown = null;
         const text = stdout.trim();
         if (text !== "") {

@@ -158,7 +158,10 @@ test("WslAdapter.spawn: parses JSON envelope into OrmbResult", async () => {
   const res = await adapter.spawn(["publish", "note.md", "--json"]);
   assert.equal(res.ok, true);
   assert.equal(res.code, "published");
-  assert.equal(res.data?.pages, 3);
+  assert.ok(res.data && "pages" in res.data, "publish data has pages");
+  if (res.data && "pages" in res.data) {
+    assert.equal(res.data.pages, 3);
+  }
 });
 
 test("WslAdapter.spawn: parses JSON envelope even on non-zero exit", async () => {

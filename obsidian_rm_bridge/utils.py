@@ -6,7 +6,40 @@ import os
 import re
 from pathlib import Path
 
-__all__ = ["ensure_dir", "expand_path", "expand_user_path", "list_md_files", "strip_frontmatter"]
+__all__ = [
+    "ensure_dir",
+    "expand_path",
+    "expand_user_path",
+    "list_md_files",
+    "strip_frontmatter",
+    "strip_marker_blocks",
+]
+
+
+# Match an ormb annotations marker block AND everything after it (the
+# transcribed annotation sections). Annotations always live at the end of
+# the note, so stripping from the first marker to end-of-file is the
+# correct feedback-loop-prevention semantic (grok C3, ARB R4).
+_MARKER_BLOCK_START_RE = re.compile(r"<!-- ormb:annotations[^>]*?-->", re.DOTALL)
+
+
+def strip_marker_blocks(content: str) -> str:
+    """Remove ``<!-- ormb:annotations ... -->`` marker blocks and all
+    annotation text that follows them.
+
+    Marker blocks are HTML comments injected by the pull command to track
+    pulled annotations. Stripping the marker **and the annotation body text**
+    at publish time prevents the publish→pull feedback loop (Phase 5b,
+    ARB R4): annotations that survive into the published PDF would
+    round-trip back as content on the next pull.
+
+    Everything from the first ``<!-- ormb:annotations`` marker to
+    end-of-file is removed — annotations always live at the end of the note.
+    """
+    match = _MARKER_BLOCK_START_RE.search(content)
+    if match is None:
+        return content
+    return content[:match.start()].rstrip()
 
 
 def strip_frontmatter(content: str) -> str:

@@ -11,6 +11,8 @@ No veviki or Hermes paths — config comes from :mod:`config` (DC-3).
 from __future__ import annotations
 
 import datetime
+import hashlib
+import json
 import os
 import sys
 import tempfile
@@ -152,7 +154,8 @@ def retrieve_to_json(
 
     Like :func:`retrieve` but writes nothing to disk. Returns a dict with:
     ``sections`` (list of ``{"page": N, "text": "..."}``),
-    ``doc_id``, ``total_pages``, ``annotated_pages``.
+    ``doc_id``, ``rev`` (8-char sha256 prefix), ``total_pages``,
+    ``annotated_pages``.
     """
     if rm_folder is None:
         rm_folder = get("remarkable.folder")
@@ -177,12 +180,20 @@ def retrieve_to_json(
         annotations = vision_client.transcribe_pages(png_paths, api_key, model=model)
 
     sections = [
-        {"page": page_num, "text": format_annotations([(page_num, text)], date_str=datetime.date.today().isoformat())}
+        {"page": page_num, "text": text}
         for page_num, text in annotations
     ]
+    # Short revision hash so the plugin can stamp a marker block
+    # (<!-- ormb:annotations doc="..." rev="..." -->) for replace-not-duplicate
+    # semantics on re-pull (Phase 5b, ARB R4). Content-based, not time-based
+    # (grok warning) — same annotations → same rev → idempotent re-pull.
+    rev = hashlib.sha256(
+        json.dumps(sections, sort_keys=True, ensure_ascii=False).encode()
+    ).hexdigest()[:8]
     return {
         "sections": sections,
         "doc_id": page_name,
+        "rev": rev,
         "total_pages": total_pages,
         "annotated_pages": len(sections),
     }

@@ -10,6 +10,7 @@ from obsidian_rm_bridge.utils import (
     expand_user_path,
     list_md_files,
     strip_frontmatter,
+    strip_marker_blocks,
 )
 
 
@@ -82,3 +83,52 @@ def test_expand_path_still_expands_vars(tmp_path, monkeypatch):
     p = expand_path("$ORB_VAR/file.txt")
     assert "subdir" in str(p)
     assert "$ORB_VAR" not in str(p)
+
+
+# --- Phase 5b: strip_marker_blocks ---
+
+
+def test_strip_marker_blocks_removes_marker_and_body_to_eof():
+    """Marker block AND annotation body text after it are removed (grok C3, R4).
+
+    Stripping to EOF prevents the publish→pull feedback loop: annotation
+    text that survives into the published PDF would round-trip as content.
+    """
+    content = (
+        "# Note\n\n"
+        '<!-- ormb:annotations doc="my-page" rev="abc12345" -->\n'
+        "## Page 1\n\n> scribble\n"
+    )
+    # Everything from the marker to EOF is removed.
+    assert strip_marker_blocks(content) == "# Note"
+
+
+def test_strip_marker_blocks_no_blocks():
+    content = "# Just a note\n\nNo markers here.\n"
+    assert strip_marker_blocks(content) == content
+
+
+def test_strip_marker_blocks_strips_from_first_marker_to_eof():
+    """Multiple markers: everything from the FIRST marker to EOF is removed."""
+    content = (
+        "Keep me\n\n"
+        '<!-- ormb:annotations doc="a" rev="11111111" -->\n'
+        "annot1\n"
+        '<!-- ormb:annotations doc="b" rev="22222222" -->\n'
+        "annot2\n"
+    )
+    assert strip_marker_blocks(content) == "Keep me"
+
+
+def test_strip_marker_blocks_preserves_content_before_marker():
+    """Content before the first marker is preserved."""
+    content = (
+        "# Title\n\nSome content.\n\n"
+        '<!-- ormb:annotations doc="x" rev="deadbeef" -->\n'
+        "> annotation text\n"
+    )
+    result = strip_marker_blocks(content)
+    assert "# Title" in result
+    assert "Some content." in result
+    assert "ormb:annotations" not in result
+    assert "annotation text" not in result

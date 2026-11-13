@@ -16,6 +16,7 @@ export const DEFAULT_SETTINGS = {
   rmFolder: "/Obsidian",
   visionModel: "",
   automountRoot: "/mnt",
+  pullConsentGiven: false,
 };
 
 export type OrmbSettingsWithDefaults = typeof DEFAULT_SETTINGS;
@@ -134,6 +135,27 @@ export class OrmbSettingsTab extends PluginSettingTab {
           await this.plugin.saveSettings();
           this.plugin.refreshAdapter();
         });
+      });
+
+    // --- Pull consent -----------------------------------------------------
+    new Setting(containerEl)
+      .setName("Pull annotation consent")
+      .setDesc(
+        this.plugin.settings.pullConsentGiven
+          ? "Consent given: pulls send page images to OpenRouter for transcription."
+          : "Not yet given — the first pull will show a consent dialog.",
+      )
+      .addButton((btn) => {
+        btn
+          .setButtonText(
+            this.plugin.settings.pullConsentGiven ? "Revoke consent" : "Give consent",
+          )
+          .setDisabled(false)
+          .onClick(async () => {
+            this.plugin.settings.pullConsentGiven = !this.plugin.settings.pullConsentGiven;
+            await this.plugin.saveSettings();
+            this.display();
+          });
       });
 
     // --- Test connection --------------------------------------------------
