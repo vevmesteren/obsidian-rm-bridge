@@ -16,24 +16,30 @@ __all__ = [
 ]
 
 
-# Match an ormb annotations marker block: <!-- ormb:annotations ... -->.
-# The comment may carry attributes (doc="...", rev="...") and may span
-# multiple lines (DOTALL). Non-greedy so two adjacent blocks both match.
-_MARKER_BLOCK_RE = re.compile(r"<!-- ormb:annotations[^>]*?-->", re.DOTALL)
+# Match an ormb annotations marker block AND everything after it (the
+# transcribed annotation sections). Annotations always live at the end of
+# the note, so stripping from the first marker to end-of-file is the
+# correct feedback-loop-prevention semantic (grok C3, ARB R4).
+_MARKER_BLOCK_START_RE = re.compile(r"<!-- ormb:annotations[^>]*?-->", re.DOTALL)
 
 
 def strip_marker_blocks(content: str) -> str:
-    """Remove ``<!-- ormb:annotations ... -->`` marker blocks from markdown.
+    """Remove ``<!-- ormb:annotations ... -->`` marker blocks and all
+    annotation text that follows them.
 
     Marker blocks are HTML comments injected by the pull command to track
-    pulled annotations. Stripping them at publish time prevents the
-    publish→pull feedback loop (Phase 5b, ARB R4): a marker that survives
-    into the published PDF would round-trip back as content.
+    pulled annotations. Stripping the marker **and the annotation body text**
+    at publish time prevents the publish→pull feedback loop (Phase 5b,
+    ARB R4): annotations that survive into the published PDF would
+    round-trip back as content on the next pull.
 
-    Only the comment itself is removed; any annotation text the user kept
-    below it is preserved for rendering.
+    Everything from the first ``<!-- ormb:annotations`` marker to
+    end-of-file is removed — annotations always live at the end of the note.
     """
-    return _MARKER_BLOCK_RE.sub("", content)
+    match = _MARKER_BLOCK_START_RE.search(content)
+    if match is None:
+        return content
+    return content[:match.start()].rstrip()
 
 
 def strip_frontmatter(content: str) -> str:

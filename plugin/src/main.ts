@@ -23,13 +23,15 @@ import {
 import type { OrmbPullData, OrmbResult, PlatformConfig } from "./types.ts";
 
 const PUBLISH_NOTICE_OK = (msg: string) => `Published ✓ ${msg}`;
+const PULL_NOTICE_OK = (msg: string) => `Pulled ✓ ${msg}`;
 const PUBLISH_BUSY = "Publish to reMarkable already in progress — please wait.";
 const PULL_BUSY = "Pull already in progress — please wait.";
 
 /** Map an OrmbResult code to a user-facing Notice. */
-function noticeForResult(res: OrmbResult): void {
+function noticeForResult(res: OrmbResult, verb: "Published" | "Pulled" = "Published"): void {
   if (res.ok) {
-    new Notice(PUBLISH_NOTICE_OK(res.message));
+    const prefix = verb === "Pulled" ? PULL_NOTICE_OK : PUBLISH_NOTICE_OK;
+    new Notice(prefix(res.message));
     return;
   }
   const tips: Record<string, string> = {
@@ -246,16 +248,30 @@ export default class ObsidianRmBridgePlugin extends Plugin {
         progressLines.push(line);
       });
       if (res.ok && res.code === "transcribed" && res.data) {
-        const pullData = res.data as OrmbPullData;
-        const markerBlock = buildMarkerBlock(pullData);
-        // Atomic, undo-able write: vault.process reads current content and
-        // applies the replace-not-duplicate transform in one step.
-        await this.app.vault.process(file, (current) =>
-          applyMarkerBlock(current, markerBlock, pullData),
-        );
-        new Notice(`Pulled ${pullData.annotated_pages} annotation(s) ✓`);
+        // Validate that res.data is OrmbPullData, not OrmbPublishData (grok).
+        const d = res.data as Record<string, unknown>;
+        if (!("sections" in d) || !Array.isArray(d.sections)) {
+          noticeForResult(res);
+        } else {
+          const pullData = res.data as OrmbPullData;
+        // Guard against empty pulls — don't wipe existing annotations if
+        // the transcription returned nothing (grok C1).
+        if (
+          !pullData.sections || pullData.sections.length === 0 ||
+          pullData.annotated_pages === 0
+        ) {
+          new Notice("No annotations found — existing annotations preserved.");
+        } else {
+          const markerBlock = buildMarkerBlock(pullData);
+          // Atomic, undo-able write: vault.process reads current content and
+          // applies the replace-not-duplicate transform in one step.
+          await this.app.vault.process(file, (current) =>
+            applyMarkerBlock(current, markerBlock, pullData),
+          );
+          new Notice(`Pulled ${pullData.annotated_pages} annotation(s) ✓`);
+        }
       } else {
-        noticeForResult(res);
+        noticeForResult(res, "Pulled");
       }
     } catch (err) {
       new Notice(`Pull failed: ${(err as Error).message}`);

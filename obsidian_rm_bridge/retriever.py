@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import datetime
 import hashlib
+import json
 import os
 import sys
 import tempfile
@@ -184,9 +185,10 @@ def retrieve_to_json(
     ]
     # Short revision hash so the plugin can stamp a marker block
     # (<!-- ormb:annotations doc="..." rev="..." -->) for replace-not-duplicate
-    # semantics on re-pull (Phase 5b, ARB R4).
+    # semantics on re-pull (Phase 5b, ARB R4). Content-based, not time-based
+    # (grok warning) — same annotations → same rev → idempotent re-pull.
     rev = hashlib.sha256(
-        f"{page_name}{datetime.datetime.now().isoformat()}".encode()
+        json.dumps(sections, sort_keys=True, ensure_ascii=False).encode()
     ).hexdigest()[:8]
     return {
         "sections": sections,

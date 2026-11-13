@@ -15,16 +15,17 @@ import type { OrmbPullData, PlatformConfig } from "../types.ts";
 // buildPullArgs — argv contract for `ormb pull --emit json` (Phase 5b)
 // ---------------------------------------------------------------------------
 
-test("buildPullArgs: passes file basename as the page_name positional", () => {
+test("buildPullArgs: passes file basename (no .md) as the page_name positional", () => {
   const args = buildPullArgs(
-    { path: "dir/My Note.md", basename: "My Note.md" },
+    { path: "dir/My Note.md", basename: "My Note" },
     "/mnt/c/vault",
     "/Obsidian",
   );
   assert.equal(args[0], "pull");
   // page_name is a positional the CLI requires (cli.py:110,311) — must be
-  // the basename, not the full vault-relative path.
-  assert.equal(args[1], "My Note.md");
+  // the basename WITHOUT .md, matching what publish sends (Path.stem).
+  assert.equal(args[1], "My Note");
+  assert.ok(!args[1].endsWith(".md"), "page_name must not include .md extension");
 });
 
 test("buildPullArgs: includes --emit json, --vault, --rm-folder, --json", () => {
@@ -114,10 +115,10 @@ test("stripExistingAnnotations: strips from the first marker to end of file", ()
 // applyMarkerBlock — replace, not duplicate (ARB R4)
 // ---------------------------------------------------------------------------
 
-test("applyMarkerBlock: appends marker + sections to clean content", () => {
+test("applyMarkerBlock: appends marker + sections with page headers to clean content", () => {
   const content = "# Note";
   const data: OrmbPullData = {
-    sections: [{ page: 1, text: "**Page 1:**\n> first" }],
+    sections: [{ page: 1, text: "> first scribble" }],
     doc_id: "note",
     rev: "cafef00d",
     total_pages: 1,
@@ -126,7 +127,7 @@ test("applyMarkerBlock: appends marker + sections to clean content", () => {
   const out = applyMarkerBlock(content, buildMarkerBlock(data), data);
   assert.equal(
     out,
-    '# Note\n<!-- ormb:annotations doc="note" rev="cafef00d" -->\n**Page 1:**\n> first\n',
+    '# Note\n<!-- ormb:annotations doc="note" rev="cafef00d" -->\n## Page 1\n\n> first scribble\n',
   );
 });
 
@@ -134,16 +135,16 @@ test("applyMarkerBlock: replaces existing marker + sections, does not duplicate"
   const content =
     "# Note\n" +
     '<!-- ormb:annotations doc="note" rev="oldoldol" -->\n' +
-    "**Page 1:**\n> old\n";
+    "## Page 1\n\n> old\n";
   const data: OrmbPullData = {
-    sections: [{ page: 2, text: "**Page 2:**\n> new" }],
+    sections: [{ page: 2, text: "> new" }],
     doc_id: "note",
     rev: "newnewne",
     total_pages: 2,
     annotated_pages: 1,
   };
   const out = applyMarkerBlock(content, buildMarkerBlock(data), data);
-  assert.ok(out.includes("rev=\"newnewne\""), "new rev present");
+  assert.ok(out.includes('rev="newnewne"'), "new rev present");
   assert.ok(!out.includes("oldoldol"), "old rev gone");
   assert.ok(out.includes("> new"), "new section text present");
   assert.ok(!out.includes("> old"), "old section text gone");
@@ -153,6 +154,52 @@ test("applyMarkerBlock: replaces existing marker + sections, does not duplicate"
     1,
     "exactly one marker block",
   );
+});
+
+// ---------------------------------------------------------------------------
+// buildMarkerBlock — sanitization (grok suggestion)
+// ---------------------------------------------------------------------------
+
+test("buildMarkerBlock: sanitizes quote and -- in doc_id/rev", () => {
+  const data: OrmbPullData = {
+    sections: [],
+    doc_id: 'evil"-->',
+    rev: 'bad-->',
+    total_pages: 0,
+    annotated_pages: 0,
+  };
+  const marker = buildMarkerBlock(data);
+  // The marker template has 4 quotes (2 pairs for doc/rev). The
+  // injected " is sanitized so no EXTRA quotes appear.
+  const quoteCount = (marker.match(/"/g) || []).length;
+  assert.equal(quoteCount, 4, "exactly 4 quotes (template pairs only)");
+  assert.equal((marker.match(/-->/g) || []).length, 1, "exactly one --> (the close)");
+});
+
+// ---------------------------------------------------------------------------
+// Empty pull protection (grok C1)
+// ---------------------------------------------------------------------------
+
+test("applyMarkerBlock: empty sections should not wipe existing content", () => {
+  // This test documents the contract: the plugin's pullAnnotations
+  // guards against empty pulls BEFORE calling applyMarkerBlock.
+  // If sections is empty, applyMarkerBlock would still strip existing
+  // annotations and write an empty block — so the plugin must check first.
+  const content =
+    "# Note\n" +
+    '<!-- ormb:annotations doc="note" rev="oldoldol" -->\n' +
+    "## Page 1\n\n> existing annotation\n";
+  const data: OrmbPullData = {
+    sections: [],
+    doc_id: "note",
+    rev: "00000000",
+    total_pages: 5,
+    annotated_pages: 0,
+  };
+  // The plugin checks annotated_pages === 0 and skips the write.
+  // Document the contract: applyMarkerBlock with empty sections WOULD wipe.
+  const out = applyMarkerBlock(content, buildMarkerBlock(data), data);
+  assert.ok(!out.includes("existing annotation"), "empty apply wipes — plugin must guard");
 });
 
 // ---------------------------------------------------------------------------

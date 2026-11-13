@@ -88,27 +88,19 @@ def test_expand_path_still_expands_vars(tmp_path, monkeypatch):
 # --- Phase 5b: strip_marker_blocks ---
 
 
-def test_strip_marker_blocks_removes_single_block():
+def test_strip_marker_blocks_removes_marker_and_body_to_eof():
+    """Marker block AND annotation body text after it are removed (grok C3, R4).
+
+    Stripping to EOF prevents the publish→pull feedback loop: annotation
+    text that survives into the published PDF would round-trip as content.
+    """
     content = (
         "# Note\n\n"
         '<!-- ormb:annotations doc="my-page" rev="abc12345" -->\n'
-        "**Page 1:**\n> scribble\n"
+        "## Page 1\n\n> scribble\n"
     )
-    # Only the HTML-comment marker is removed; the annotation text after it
-    # is left for the publisher to render.
-    assert strip_marker_blocks(content) == (
-        "# Note\n\n\n**Page 1:**\n> scribble\n"
-    )
-
-
-def test_strip_marker_blocks_removes_multiple_blocks():
-    content = (
-        '<!-- ormb:annotations doc="a" rev="11111111" -->\n'
-        "text1\n"
-        '<!-- ormb:annotations doc="b" rev="22222222" -->\n'
-        "text2\n"
-    )
-    assert strip_marker_blocks(content) == "\ntext1\n\ntext2\n"
+    # Everything from the marker to EOF is removed.
+    assert strip_marker_blocks(content) == "# Note"
 
 
 def test_strip_marker_blocks_no_blocks():
@@ -116,16 +108,27 @@ def test_strip_marker_blocks_no_blocks():
     assert strip_marker_blocks(content) == content
 
 
-def test_strip_marker_blocks_preserves_content_between():
+def test_strip_marker_blocks_strips_from_first_marker_to_eof():
+    """Multiple markers: everything from the FIRST marker to EOF is removed."""
     content = (
-        "Before\n"
+        "Keep me\n\n"
+        '<!-- ormb:annotations doc="a" rev="11111111" -->\n'
+        "annot1\n"
+        '<!-- ormb:annotations doc="b" rev="22222222" -->\n'
+        "annot2\n"
+    )
+    assert strip_marker_blocks(content) == "Keep me"
+
+
+def test_strip_marker_blocks_preserves_content_before_marker():
+    """Content before the first marker is preserved."""
+    content = (
+        "# Title\n\nSome content.\n\n"
         '<!-- ormb:annotations doc="x" rev="deadbeef" -->\n'
-        "middle\n"
-        '<!-- ormb:annotations doc="y" rev="cafef00d" -->\n'
-        "After\n"
+        "> annotation text\n"
     )
     result = strip_marker_blocks(content)
-    assert "Before" in result
-    assert "After" in result
-    assert "middle" in result
+    assert "# Title" in result
+    assert "Some content." in result
     assert "ormb:annotations" not in result
+    assert "annotation text" not in result

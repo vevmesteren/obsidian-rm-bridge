@@ -15,7 +15,12 @@ import type { OrmbPullData } from "./types.ts";
 
 /** Build the marker comment that anchors a pulled-annotation block. */
 export function buildMarkerBlock(data: OrmbPullData): string {
-  return `<!-- ormb:annotations doc="${data.doc_id}" rev="${data.rev}" -->`;
+  // Sanitize doc_id and rev to prevent HTML comment injection —
+  // reject `"` and `--` which could break the comment or inject
+  // a premature `-->` close (grok suggestion).
+  const safeDoc = data.doc_id.replace(/["]/g, "_").replace(/--/g, "__");
+  const safeRev = data.rev.replace(/["]/g, "_").replace(/--/g, "__");
+  return `<!-- ormb:annotations doc="${safeDoc}" rev="${safeRev}" -->`;
 }
 
 /**
@@ -42,7 +47,12 @@ export function applyMarkerBlock(
   data: OrmbPullData,
 ): string {
   const cleaned = stripExistingAnnotations(content);
-  const sections = data.sections.map((s) => s.text).join("\n");
+  // Format each section with a page header so pulled annotations are
+  // readable in the note. The CLI's retrieve_to_json returns raw text
+  // per page — we add the `## Page N` header here (grok C2).
+  const sections = data.sections.map((s) =>
+    `## Page ${s.page}\n\n${s.text}`,
+  ).join("\n\n");
   return `${cleaned}\n${markerBlock}\n${sections}\n`;
 }
 
