@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { WslAdapter } from "../wsl-adapter.ts";
+import { buildPullArgs } from "../pull-args.ts";
 import {
   applyMarkerBlock,
   buildConsentBody,
@@ -9,6 +10,46 @@ import {
   stripExistingAnnotations,
 } from "../marker-block.ts";
 import type { OrmbPullData, PlatformConfig } from "../types.ts";
+
+// ---------------------------------------------------------------------------
+// buildPullArgs — argv contract for `ormb pull --emit json` (Phase 5b)
+// ---------------------------------------------------------------------------
+
+test("buildPullArgs: passes file basename as the page_name positional", () => {
+  const args = buildPullArgs(
+    { path: "dir/My Note.md", basename: "My Note.md" },
+    "/mnt/c/vault",
+    "/Obsidian",
+  );
+  assert.equal(args[0], "pull");
+  // page_name is a positional the CLI requires (cli.py:110,311) — must be
+  // the basename, not the full vault-relative path.
+  assert.equal(args[1], "My Note.md");
+});
+
+test("buildPullArgs: includes --emit json, --vault, --rm-folder, --json", () => {
+  const args = buildPullArgs(
+    { path: "note.md", basename: "note" },
+    "/mnt/c/vault",
+    "/Obsidian",
+  );
+  assert.ok(args.includes("--emit"));
+  assert.equal(args[args.indexOf("--emit") + 1], "json");
+  assert.ok(args.includes("--vault"));
+  assert.equal(args[args.indexOf("--vault") + 1], "/mnt/c/vault");
+  assert.ok(args.includes("--rm-folder"));
+  assert.equal(args[args.indexOf("--rm-folder") + 1], "/Obsidian");
+  assert.ok(args.includes("--json"));
+});
+
+test("buildPullArgs: does not pass --md (dead on the --emit json path)", () => {
+  const args = buildPullArgs(
+    { path: "note.md", basename: "note" },
+    "/mnt/c/vault",
+    "/Obsidian",
+  );
+  assert.ok(!args.includes("--md"), "--md is unused by retrieve_to_json");
+});
 
 // ---------------------------------------------------------------------------
 // buildMarkerBlock — marker comment format (Phase 5b)

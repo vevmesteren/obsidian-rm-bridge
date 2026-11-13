@@ -8,6 +8,7 @@
 import { Modal, Notice, Plugin, TFile } from "obsidian";
 import { WslAdapter, type AppRef } from "./wsl-adapter.ts";
 import { VaultBridge, type VaultApp } from "./vault.ts";
+import { buildPullArgs } from "./pull-args.ts";
 import {
   applyMarkerBlock,
   buildConsentBody,
@@ -222,6 +223,11 @@ export default class ObsidianRmBridgePlugin extends Plugin {
       return;
     }
 
+    // Save the dirty editor before we read/write via vault.process — pull
+    // reads on-disk content and writes back, so unsaved buffer edits would
+    // otherwise be overwritten (same rationale as publish).
+    await this.saveActiveEditorIfDirty();
+
     // First-run consent: OpenRouter egress disclosure. Sticky once given.
     if (!this.settings.pullConsentGiven) {
       const consent = await this.showPullConsentModal(file);
@@ -233,16 +239,7 @@ export default class ObsidianRmBridgePlugin extends Plugin {
     this.publishing = true;
     try {
       const vaultRoot = this.vaultBridge.vaultPathLinux;
-      const args = [
-        "pull",
-        "--emit",
-        "json",
-        "--md",
-        file.path,
-        "--vault",
-        vaultRoot,
-        "--json",
-      ];
+      const args = buildPullArgs(file, vaultRoot, this.settings.rmFolder);
       // Best-effort status bar from stderr lines (transcription progress).
       const progressLines: string[] = [];
       const res = await this.adapter.spawn(args, (line) => {
@@ -292,14 +289,25 @@ export default class ObsidianRmBridgePlugin extends Plugin {
         cls: "mod-cta",
       });
 
-      cancelBtn.onclick = () => {
-        modal.close();
-        resolve(false);
+      // Resolve exactly once: Obsidian modals can be dismissed via Escape or
+      // backdrop click (which call modal.close() without firing either button
+      // handler). Treat any non-OK dismissal as a cancellation so the awaited
+      // promise never hangs.
+      let resolved = false;
+      const done = (v: boolean): void => {
+        if (resolved) return;
+        resolved = true;
+        resolve(v);
       };
       okBtn.onclick = () => {
+        done(true);
         modal.close();
-        resolve(true);
       };
+      cancelBtn.onclick = () => {
+        done(false);
+        modal.close();
+      };
+      modal.onClose = () => done(false);
       modal.open();
     });
   }

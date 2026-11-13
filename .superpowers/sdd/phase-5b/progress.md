@@ -8,3 +8,13 @@
 ## Tasks
 
 Task INC-001: complete (commits 8a0e6a3..07e2eef, tests: python3 -m pytest tests/ -q → 151 passed, 6 skipped)
+
+Task INC-002: complete (commits 07e2eef..02ec3e2, tests: python3 -m pytest tests/ -q → 153 passed, 6 skipped)
+
+Task INC-003/004/005: complete (commits 02ec3e2..8ae491c, tests: npm test → 27 passed; npm run build → main.js 21.5kb)
+
+## Rulings
+- R1: Extracted marker-block logic (buildMarkerBlock, stripExistingAnnotations, applyMarkerBlock, buildConsentBody) into pure module plugin/src/marker-block.ts instead of private methods on the plugin class. Why: the plugin class imports `obsidian` (Electron/browser API) which cannot be imported in node:test; the existing test suite never instantiates the plugin. Pure module = unit-testable without an obsidian mock harness not present in the repo. Cost if wrong: methods that should be on the class per spec are module functions; behavior identical, main.ts composes them.
+- R2: stripExistingAnnotations uses slice-to-first-marker + trimEnd instead of regex `<!-- ... -->[\s\S]*$` replace + trimEnd. Why: the spec's regex+trimEnd would trim trailing whitespace even when no marker is present (altering clean content). The slice approach preserves no-marker content verbatim and is equivalent for the marker-present case. Cost if wrong: none observable; identical output for all test cases.
+- R3: showPullConsentModal is not given a full Modal-interaction unit test (only its body text is tested via buildConsentBody). Why: testing the Modal button wiring requires an obsidian mock harness not present in the repo. The disclosure wording (the consent-relevant content) is tested. Cost if wrong: a button-wiring regression could ship uncaught.
+- R4: noticeForResult reused for pull error codes. Why: pull shares error codes (not_paired, key_missing, etc.) with publish. Success code "transcribed" handled inline. Cost if wrong: a pull-specific error code would get the generic "ormb error: <msg>" fallback — acceptable.
