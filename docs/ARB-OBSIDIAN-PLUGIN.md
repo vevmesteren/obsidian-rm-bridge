@@ -562,10 +562,12 @@ Reads API key from stdin/getpass — key never in argv. Keep legacy `config set 
 
 | ID | Obsidian process | CLI / venv / rmapi / Chromium | Phase |
 |----|------------------|-------------------------------|-------|
-| **T-WSL** | Windows (`win32`) | WSL2 Ubuntu | **5a — primary** |
-| **T-MAC** | macOS (`darwin`) | Native venv at `~/.venvs/ormb` | 5c |
-| **T-LINUX** | Linux desktop (`linux`, official AppImage/.deb) | Native venv + `~/.local/bin/rmapi` | 5c |
-| **T-WIN** | Windows (`win32`) | Native Windows Python venv | 5c (secondary) |
+| **T-WSL** | Windows (`win32`) | WSL2 Ubuntu | **5a — primary, proven at launch** |
+| **T-MAC** | macOS (`darwin`) | Native venv at `~/.venvs/ormb` | 5c — community-tested |
+| **T-LINUX** | Linux desktop (`linux`, official AppImage/.deb) | Native venv + `~/.local/bin/rmapi` | 5c — community-tested |
+| **T-WIN** | Windows (`win32`) | Native Windows Python venv | 5c — community-tested (secondary) |
+
+**Launch posture:** T-WSL is the only topology proven at v1 launch (E2E tested by the maintainer). T-MAC, T-LINUX, and T-WIN are shipped as best-effort and validated via community testing — Reddit outreach posts will solicit testers and PRs for platform-specific fixes.
 
 **Explicitly rejected for v1** (hard error, not silent failure):
 
