@@ -1,6 +1,6 @@
 # obsidian-rm-bridge — Architecture & Delivery Plan
 
-> **Status:** Phase 5a-0 — CLI contract changes merged. Phase 5a (plugin scaffold) next.
+> **Status:** Phase 5a — Plugin scaffold + publish command shipped (T-WSL). Phase 5b next.
 > **Author:** vevmesteren
 > **Date:** 2026-11-13
 > **Repo:** [vevmesteren/obsidian-rm-bridge](https://github.com/vevmesteren/obsidian-rm-bridge)
@@ -18,8 +18,8 @@ This project is the open-source extraction of the **veviki-remarkable-bridge** �
 | Phase 1 | 2026-11-12 | ✅ Done | `publish.py` — markdown → PDF → reMarkable upload (PoC) |
 | Phase 2 | 2026-11-12 | ✅ Done | `retrieve.py` — annotation round-trip via GLM-4.5V vision |
 | Phase 3 | 2026-11-12 | ✅ Done | Polish: tests, CSS e-ink styling, folder publish, re-upload handling |
-| **Phase 4** | **2026-11-12** | **In Progress** | **Open source extraction — this document** |
-| Phase 5 | TBD | Planned | Obsidian TypeScript plugin (thin wrapper over CLI) |
+| **Phase 4** | **2026-11-12** | **✅ Done** | **Open source extraction — this document** |
+| **Phase 5** | **2026-11-13** | **In Progress** | **Obsidian TypeScript plugin (thin wrapper over CLI)** |
 
 ### What's Proven
 
@@ -375,13 +375,19 @@ Environment variables override config file:
 - **Done criteria:** All tests pass, `ormb publish` and `ormb pull` work end-to-end on a fresh clone, README install instructions verified on at least Linux (Hermes host), CLI produces correct PDF with mermaid rendering
 - **Branch:** `feat/v0.1.0-cli` → PR → cold review → merge to main
 
-### Post-v0.1.0 (Phase 5 — Obsidian Plugin)
+### Phase 5 — Obsidian Plugin (shipped 5a)
 
-Not in scope for this issue. Thin TypeScript Obsidian plugin that:
-- Calls `ormb` CLI under the hood
-- Provides command palette integration (right-click → "Publish to reMarkable")
-- Settings UI for config (writes to `config.toml`)
-- Requires Python + ormb installed as prerequisite
+The TypeScript Obsidian plugin is a thin wrapper around the `ormb` CLI:
+
+- **Plugin scaffold** (`plugin/`): `manifest.json` (`isDesktopOnly: true`), esbuild build, TypeScript strict
+- **WSL adapter** (`wsl-adapter.ts`): `wsl.exe --exec` argv-only (no shell, no `bash -c`, no `cmd.exe`), `WSL_UTF8=1`, `PYTHONIOENCODING=utf-8`, `windowsHide: true`
+- **Path translation** (`path-translate.ts`): `winToWsl` — translates Windows vault root to WSL path, rejects control chars/UNC/non-drive formats
+- **Publish command** (`main.ts`): command palette + ribbon + file-menu, single-flight lock, saves dirty editor, spawns `ormb publish --json`, shows Notice
+- **Settings tab** (`settings.ts`): launcher picker, distro, pythonBin, rmFolder, visionModel — **NO API key field** (secrets stay in CLI's 0600 config)
+- **Doctor on load**: surfaces warnings (rmapi missing, not paired, key missing, Chromium missing)
+- **CI grep ban**: `exec(`, `execSync(`, `shell: true`, `bash -c`, `cmd.exe /c` banned in `plugin/src/`
+
+**Primary topology:** T-WSL (Obsidian on Windows, ormb CLI in WSL2). T-MAC, T-LINUX, T-WIN deferred to Phase 5c.
 
 ---
 

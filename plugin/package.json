@@ -1,0 +1,22 @@
+{
+  "name": "obsidian-rm-bridge-plugin",
+  "version": "0.1.0",
+  "description": "Obsidian plugin that bridges notes to reMarkable via the ormb CLI.",
+  "private": true,
+  "type": "module",
+  "main": "main.js",
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "test": "node --test --experimental-strip-types src/__tests__/*.test.ts"
+  },
+  "devDependencies": {
+    "obsidian": "latest",
+    "@types/node": "^22.0.0",
+    "builtin-modules": "^3.3.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.6.0"
+  },
+  "allowScripts": {
+    "esbuild@0.24.2": true
+  }
+}
