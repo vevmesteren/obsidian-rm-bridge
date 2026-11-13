@@ -46,6 +46,10 @@ def _make_route_handler(vault_root: Path | None = None):
 
     Allows: ``data:`` URIs, the mermaid CDN script, and in-vault ``file:``
     URIs (containment-checked). Everything else is aborted (ARB item 8).
+
+    When ``vault_root`` is ``None``, ALL ``file://`` URIs are blocked (there
+    is no vault to contain against) — only ``data:`` and the mermaid CDN URL
+    are allowed.
     """
     def _handler(route, request):
         url = request.url
@@ -98,8 +102,12 @@ def render_mermaid_to_png(
         browser = p.chromium.launch()
         try:
             page = browser.new_page(viewport={"width": width, "height": 800})
-            if vr is not None:
-                page.route("**/*", _make_route_handler(vr))
+            # ARB item 8: the route interceptor must ALWAYS be active, even when
+            # vault_root is None (e.g. render_mermaid_blocks default path).
+            # When vault_root is None, file:// URIs are blocked unconditionally
+            # (no vault to contain against) and only data: and the mermaid CDN
+            # URL are allowed.
+            page.route("**/*", _make_route_handler(vr))
             page.set_content(html, wait_until="networkidle")
             # Wait for mermaid to swap the fenced code for an <svg>.
             page.wait_for_selector("svg", timeout=timeout_ms, state="attached")

@@ -236,6 +236,20 @@ def test_publish_json_doc_exists(tmp_config, tmp_path, capsys):
     assert env["code"] == "doc_exists"
 
 
+def test_publish_doc_exists_without_json(tmp_config, tmp_path, capsys):
+    """Cold review #4: doc_exists check runs even without --json (stderr + return 1)."""
+    md = tmp_path / "note.md"
+    md.write_text("# Note\n")
+    listing = "[f]\tnote\n"
+    with patch("obsidian_rm_bridge.cli.rmapi_client.ls", return_value=listing), \
+         patch("obsidian_rm_bridge.cli.publisher.publish_page") as m_pub:
+        rc = cli.main(["publish", str(md)])
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "already exists" in err
+    m_pub.assert_not_called()
+
+
 def test_publish_on_exists_content_only(tmp_config, tmp_path):
     """Item 4: --on-exists content-only passes content_only=True to publisher."""
     md = tmp_path / "note.md"
@@ -448,3 +462,49 @@ def test_publish_dollar_sign_filename(tmp_config, tmp_path, monkeypatch):
         cli.main(["publish", "Budget $HOME.md", "--vault", str(vault_dir)])
         called_path = Path(m.call_args[0][0])
         assert "$HOME" in called_path.name  # $HOME NOT expanded
+
+
+# --- Cold review: pull --all containment + JSON (#2, #3, #11) ---
+
+
+def test_pull_all_json_emits_envelope(tmp_config, tmp_path, capsys):
+    """Cold review #3: pull --all --json emits a JSON success envelope."""
+    from obsidian_rm_bridge import config as cfg
+    vault_dir = tmp_path / "vault"
+    vault_dir.mkdir()
+    (vault_dir / "alpha.md").write_text("# Alpha\n")
+    (vault_dir / "beta.md").write_text("# Beta\n")
+    cfg.set("vault.path", str(vault_dir))
+    listing = "[f]\talpha\n[f]\tbeta\n"
+    with patch("obsidian_rm_bridge.cli.rmapi_client.ls", return_value=listing), \
+         patch("obsidian_rm_bridge.cli.retriever.retrieve") as m_ret:
+        rc = cli.main(["pull", "--all", "--json"])
+    assert rc == 0
+    import json
+    env = json.loads(capsys.readouterr().out)
+    assert env["ok"] is True
+    assert env["code"] == "transcribed"
+    assert env["data"]["pages"] == 2
+    assert m_ret.call_count == 2
+
+
+def test_pull_all_containment_violation(tmp_config, tmp_path, capsys):
+    """Cold review #2/#11: pull --all --vault with a malicious listing name
+    (containing ``..``) that would resolve outside the vault returns
+    path_containment and retrieves nothing."""
+    vault_dir = tmp_path / "vault"
+    vault_dir.mkdir()
+    # Plant an .md outside the vault that the traversal name would reach.
+    (tmp_path / "secret.md").write_text("# Secret\n")
+    from obsidian_rm_bridge import config as cfg
+    cfg.set("vault.path", str(vault_dir))
+    listing = "[f]\t../secret\n"  # malicious name with traversal
+    with patch("obsidian_rm_bridge.cli.rmapi_client.ls", return_value=listing), \
+         patch("obsidian_rm_bridge.cli.retriever.retrieve") as m_ret:
+        rc = cli.main(["pull", "--all", "--vault", str(vault_dir), "--json"])
+    assert rc == 1
+    import json
+    env = json.loads(capsys.readouterr().out)
+    assert env["ok"] is False
+    assert env["code"] == "path_containment"
+    m_ret.assert_not_called()

@@ -41,18 +41,44 @@ def _emit_json(ok: bool, code: str, message: str, data=None) -> None:
 
 
 def _classify_error(e: Exception) -> str:
-    """Map an exception to a standardized error code (ARB item 1)."""
+    """Map an exception to a standardized error code (ARB item 1).
+
+    Handles the full ARB error-code spec:
+    - ``note_not_found`` — missing source note
+    - ``rmapi_missing`` / ``not_paired`` / ``cli_error`` — rmapi failures
+    - ``chromium_missing`` — Playwright/Chromium unavailable
+    - ``key_missing`` — OpenRouter API key not set
+    - ``rate_limited`` — HTTP 429 / rate limit
+    - ``vision_failed`` — all pages failed transcription
+    """
     from .rmapi_client import RmapiError
 
     if isinstance(e, FileNotFoundError):
         return "note_not_found"
+    msg = str(e).lower()
+    # rmapi errors first (RmapiError is a RuntimeError subclass).
+    from .rmapi_client import RmapiError
     if isinstance(e, RmapiError):
-        msg = str(e).lower()
         if "binary not found" in msg:
             return "rmapi_missing"
         if "not paired" in msg or "token" in msg or "unauthorized" in msg:
             return "not_paired"
         return "cli_error"
+    # key_missing: vision client raises when OPENROUTER_API_KEY is unset.
+    if isinstance(e, RuntimeError) and "api key" in msg and "not set" in msg:
+        return "key_missing"
+    # vision_failed: transcribe_pages raises when every page failed.
+    if isinstance(e, RuntimeError) and "failed transcription" in msg:
+        return "vision_failed"
+    # rate_limited: HTTP 429 / rate limit from the vision API.
+    if "429" in msg or "rate limit" in msg or "rate-limited" in msg:
+        return "rate_limited"
+    # chromium_missing: Playwright browser not installed / executable not found.
+    if isinstance(e, RuntimeError) and (
+        "executable" in msg or "chromium" in msg or "browser" in msg
+        or "playwright" in msg
+    ):
+        return "chromium_missing"
     return "cli_error"
 
 
@@ -169,15 +195,18 @@ def cmd_publish(args) -> int:
     name = path.stem if path.is_file() else path.name
     content_only = args.on_exists == "content-only"
 
-    # Item 4: --on-exists fail check (JSON mode only for backward compat).
-    if args.json and args.on_exists == "fail" and not args.dry_run:
+    # Item 4 / cold review #4: --on-exists fail check runs regardless of --json.
+    if args.on_exists == "fail" and not args.dry_run:
         try:
             listing = rmapi_client.ls(rm_folder)
             if _doc_exists_in_listing(listing, name):
-                _emit_json(False, "doc_exists",
-                           f"Document '{name}' already exists in {rm_folder}. "
-                           f"Use --on-exists content-only to replace content "
-                           f"while preserving annotations.", None)
+                msg = (f"Document '{name}' already exists in {rm_folder}. "
+                       f"Use --on-exists content-only to replace content "
+                       f"while preserving annotations.")
+                if args.json:
+                    _emit_json(False, "doc_exists", msg, None)
+                else:
+                    _eprint(f"Error: {msg}")
                 return 1
         except Exception:  # noqa: BLE001 — don't block publish on ls failure
             pass
@@ -233,13 +262,39 @@ def cmd_pull(args) -> int:
             name = ln[3:].lstrip("\t ").strip()
             if name:
                 names.append(name)
-        vault_resolved = Path(os.path.expanduser(str(vault))).resolve()
+        # Item 5/7: use expand_user_path (no expandvars) for vault paths.
+        vault_resolved = expand_user_path(str(vault)).resolve() if vault else None
+        # Cold review #2: containment check on resolved md paths in pull --all.
+        if vault_root is not None:
+            for name in names:
+                md = (vault_resolved or Path("")) / f"{name}.md"
+                if not md.resolve().is_relative_to(vault_root):
+                    if args.json:
+                        _emit_json(False, "path_containment",
+                                   f"Path resolves outside vault: {md.resolve()}", None)
+                    else:
+                        _eprint(f"Error: path resolves outside vault: {md.resolve()}")
+                    return 1
+        results = []
         for name in names:
-            md = vault_resolved / f"{name}.md"
-            if md.is_file():
-                retriever.retrieve(name, md, rm_folder=rm_folder)
+            md = vault_resolved / f"{name}.md" if vault_resolved else None
+            if md is not None and md.is_file():
+                try:
+                    retriever.retrieve(name, md, rm_folder=rm_folder)
+                    results.append({"page_name": name, "md_path": str(md)})
+                except Exception as e:  # noqa: BLE001
+                    if args.json:
+                        _emit_json(False, _classify_error(e), str(e), None)
+                    else:
+                        _eprint(f"Error: {e}")
+                    return 1
             else:
                 _eprint(f"  skipping {name}: no source .md at {md}")
+        # Cold review #3: pull --all --json emits a JSON success envelope.
+        if args.json:
+            _emit_json(True, "transcribed",
+                       f"Pulled {len(results)} page(s) from {rm_folder}",
+                       {"pages": len(results), "files": results})
         return 0
 
     if not args.page_name:
@@ -249,14 +304,15 @@ def cmd_pull(args) -> int:
     md_path = args.md_path
     if md_path is None:
         vault = args.vault or cfg.get("vault.path")
-        md_path = str(Path(os.path.expanduser(str(vault))).resolve() / f"{args.page_name}.md")
+        md_path = str(expand_user_path(str(vault)).resolve() / f"{args.page_name}.md") if vault else f"{args.page_name}.md"
     else:
         # Item 6: use expand_user_path (no expandvars) for argv paths.
         md_path = str(expand_user_path(md_path))
         if not Path(md_path).is_absolute():
             vault = args.vault or cfg.get("vault.path")
             if vault:
-                md_path = str(Path(os.path.expanduser(str(vault))) / md_path)
+                # Item 7: use expand_user_path (no expandvars) for vault paths.
+                md_path = str(expand_user_path(str(vault)) / md_path)
 
     # Item 11: containment check when --vault is provided.
     if vault_root is not None:
