@@ -36,9 +36,43 @@ _HTML_TEMPLATE = """<!doctype html>
 </head><body>
 <div class="mermaid">{diagram}</div>
 <script>
-  mermaid.initialize({{ startOnLoad: true, securityLevel: 'loose', theme: 'default' }});
+  mermaid.initialize({{ startOnLoad: true, securityLevel: 'strict', theme: 'default', htmlLabels: false }});
 </script>
 </body></html>"""
+
+
+def _make_route_handler(vault_root: Path | None = None):
+    """Build a Playwright route interceptor that only allows safe resources.
+
+    Allows: ``data:`` URIs, the mermaid CDN script, and in-vault ``file:``
+    URIs (containment-checked). Everything else is aborted (ARB item 8).
+    """
+    def _handler(route, request):
+        url = request.url
+        if url.startswith("data:"):
+            route.continue_()
+            return
+        if url.startswith(MERMAID_JS_URL):
+            route.continue_()
+            return
+        if url.startswith("file://") and vault_root is not None:
+            from urllib.parse import urlparse, unquote
+
+            parsed = urlparse(url)
+            local = Path(unquote(parsed.path))
+            try:
+                resolved = local.resolve()
+            except Exception:  # noqa: BLE001
+                route.abort()
+                return
+            if resolved.is_relative_to(vault_root.resolve()):
+                route.continue_()
+                return
+            route.abort()
+            return
+        # Block everything else
+        route.abort()
+    return _handler
 
 
 def render_mermaid_to_png(
@@ -47,6 +81,7 @@ def render_mermaid_to_png(
     *,
     width: int = MERMAID_WIDTH,
     timeout_ms: int = 30_000,
+    vault_root: str | Path | None = None,
 ) -> str:
     """Render a single mermaid ``diagram`` to ``output_path`` (PNG).
 
@@ -57,11 +92,14 @@ def render_mermaid_to_png(
     html = _HTML_TEMPLATE.format(url=MERMAID_JS_URL, diagram=diagram)
     out = Path(output_path)
     out.parent.mkdir(parents=True, exist_ok=True)
+    vr = Path(str(vault_root)).resolve() if vault_root is not None else None
 
     with sync_playwright() as p:
         browser = p.chromium.launch()
         try:
             page = browser.new_page(viewport={"width": width, "height": 800})
+            if vr is not None:
+                page.route("**/*", _make_route_handler(vr))
             page.set_content(html, wait_until="networkidle")
             # Wait for mermaid to swap the fenced code for an <svg>.
             page.wait_for_selector("svg", timeout=timeout_ms, state="attached")
@@ -74,7 +112,8 @@ def render_mermaid_to_png(
     return str(out)
 
 
-def render_mermaid_blocks(content: str, *, workdir: str | Path | None = None) -> str:
+def render_mermaid_blocks(content: str, *, workdir: str | Path | None = None,
+                          vault_root: str | Path | None = None) -> str:
     """Replace ```` ```mermaid ```` code blocks with embedded PNG ``<img>`` tags.
 
     Each block is rendered via :func:`render_mermaid_to_png` and inlined as a
@@ -92,7 +131,7 @@ def render_mermaid_blocks(content: str, *, workdir: str | Path | None = None) ->
         for i, block in enumerate(blocks):
             png_path = Path(tmpdir) / f"diagram_{i}.png"
             try:
-                render_mermaid_to_png(block, png_path)
+                render_mermaid_to_png(block, png_path, vault_root=vault_root)
                 with png_path.open("rb") as f:
                     b64 = base64.b64encode(f.read()).decode()
                 images.append(

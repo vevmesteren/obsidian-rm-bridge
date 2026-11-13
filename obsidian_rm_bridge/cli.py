@@ -8,6 +8,8 @@ argparse-based subcommands (no Click/Typer dependency — keeps the install lean
 from __future__ import annotations
 
 import argparse
+import getpass
+import json
 import os
 import platform
 import shutil
@@ -21,7 +23,7 @@ from pathlib import Path
 from . import __version__, publisher, retriever, rmapi_client
 from . import config as cfg
 from .config import resolve_key
-from .utils import expand_path
+from .utils import expand_path, expand_user_path
 
 __all__ = ["build_parser", "main"]
 
@@ -33,11 +35,48 @@ def _eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
 
+def _emit_json(ok: bool, code: str, message: str, data=None) -> None:
+    """Print a JSON result envelope to stdout (ARB item 1)."""
+    print(json.dumps({"ok": ok, "code": code, "message": message, "data": data}))
+
+
+def _classify_error(e: Exception) -> str:
+    """Map an exception to a standardized error code (ARB item 1)."""
+    from .rmapi_client import RmapiError
+
+    if isinstance(e, FileNotFoundError):
+        return "note_not_found"
+    if isinstance(e, RmapiError):
+        msg = str(e).lower()
+        if "binary not found" in msg:
+            return "rmapi_missing"
+        if "not paired" in msg or "token" in msg or "unauthorized" in msg:
+            return "not_paired"
+        return "cli_error"
+    return "cli_error"
+
+
+def _doc_exists_in_listing(listing: str, name: str) -> bool:
+    """Check if a document name exists in rmapi ls output."""
+    for ln in listing.splitlines():
+        ln = ln.strip()
+        if not ln or not ln.startswith("[f]"):
+            continue
+        doc_name = ln[3:].lstrip("\t ").strip()
+        if doc_name == name:
+            return True
+    return False
+
+
 def _setup_publish_parser(p):
     p.add_argument("path", help="Path to a .md file or a folder of .md files")
     p.add_argument("--folder", action="store_true", help="Publish all .md in the folder as one combined PDF")
     p.add_argument("--rm-folder", default=None, help="reMarkable destination folder (overrides config)")
     p.add_argument("--dry-run", action="store_true", help="Render the PDF but skip the rmapi upload")
+    p.add_argument("--json", action="store_true", help="Emit a JSON result envelope on stdout")
+    p.add_argument("--on-exists", choices=["fail", "content-only"], default="fail",
+                   help="Behavior when the document already exists (default: fail)")
+    p.add_argument("--vault", default=None, help="Vault root path (overrides config; enables containment check)")
 
 
 def _setup_pull_parser(p):
@@ -45,6 +84,10 @@ def _setup_pull_parser(p):
     p.add_argument("--md", dest="md_path", default=None, help="Source markdown file to append annotations to")
     p.add_argument("--all", dest="pull_all", action="store_true", help="Pull all annotated pages from the reMarkable folder")
     p.add_argument("--rm-folder", default=None, help="reMarkable source folder (overrides config)")
+    p.add_argument("--json", action="store_true", help="Emit a JSON result envelope on stdout")
+    p.add_argument("--emit", choices=["json"], default=None,
+                   help="Output format: 'json' returns sections without writing to disk")
+    p.add_argument("--vault", default=None, help="Vault root path (overrides config; enables containment check)")
 
 
 def _setup_config_parser(p):
@@ -54,6 +97,7 @@ def _setup_config_parser(p):
     s.add_argument("value", help="Value to set")
     sub.add_parser("show", help="Show the resolved configuration (API key masked)")
     sub.add_parser("init", help="Write the default config to disk")
+    sub.add_parser("set-key", help="Set the OpenRouter API key from stdin (not visible in argv)")
 
 
 def _setup_setup_parser(p):
@@ -66,6 +110,10 @@ def _setup_ls_parser(p):
 
 def _setup_rm_parser(p):
     p.add_argument("page_name", help="Page name/path on reMarkable to delete")
+
+
+def _setup_doctor_parser(p):
+    p.add_argument("--json", action="store_true", help="Emit a JSON health check")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -81,11 +129,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     _setup_publish_parser(sub.add_parser("publish", help="Publish a markdown page or folder to reMarkable as a PDF"))
     _setup_pull_parser(sub.add_parser("pull", help="Download, transcribe annotations, and append to source .md"))
-    _setup_config_parser(sub.add_parser("config", help="Manage configuration (set/show/init)"))
+    _setup_config_parser(sub.add_parser("config", help="Manage configuration (set/show/init/set-key)"))
     _setup_setup_parser(sub.add_parser("setup", help="Install the Playwright browser, or --rmapi to install rmapi"))
     sub.add_parser("pair", help="Pair rmapi with reMarkable (prompts for one-time code)")
     _setup_ls_parser(sub.add_parser("ls", help="List files on reMarkable"))
     _setup_rm_parser(sub.add_parser("rm", help="Delete a file on reMarkable"))
+    _setup_doctor_parser(sub.add_parser("doctor", help="Health check for dependencies and configuration"))
 
     return parser
 
@@ -94,47 +143,97 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def cmd_publish(args) -> int:
-    path = expand_path(args.path)
-    # Resolve relative paths against vault.path (issue #4).
+    # Item 6: use expand_user_path (no expandvars) for argv paths.
+    path = expand_user_path(args.path)
+    # Item 5: --vault takes precedence over config.vault.path.
+    vault_root = None
+    if args.vault:
+        vault_root = expand_user_path(args.vault).resolve()
+    # Resolve relative paths against vault root (issue #4).
     if not path.is_absolute():
-        vault = cfg.get("vault.path")
-        if vault:
-            path = Path(os.path.expanduser(str(vault))) / path
+        vr = args.vault or cfg.get("vault.path")
+        if vr:
+            path = Path(os.path.expanduser(str(vr))) / path
+    # Item 11: containment check when --vault is provided.
+    if vault_root is not None:
+        resolved = path.resolve()
+        if not resolved.is_relative_to(vault_root):
+            if args.json:
+                _emit_json(False, "path_containment",
+                           f"Path resolves outside vault: {resolved}", None)
+            else:
+                _eprint(f"Error: path resolves outside vault: {resolved}")
+            return 1
+
     rm_folder = args.rm_folder or cfg.get("remarkable.folder")
-    if args.folder:
-        if not path.is_dir():
-            _eprint(f"Error: --folder requires a directory, not a file: {path}")
+    name = path.stem if path.is_file() else path.name
+    content_only = args.on_exists == "content-only"
+
+    # Item 4: --on-exists fail check (JSON mode only for backward compat).
+    if args.json and args.on_exists == "fail" and not args.dry_run:
+        try:
+            listing = rmapi_client.ls(rm_folder)
+            if _doc_exists_in_listing(listing, name):
+                _emit_json(False, "doc_exists",
+                           f"Document '{name}' already exists in {rm_folder}. "
+                           f"Use --on-exists content-only to replace content "
+                           f"while preserving annotations.", None)
+                return 1
+        except Exception:  # noqa: BLE001 — don't block publish on ls failure
+            pass
+
+    try:
+        if args.folder:
+            if not path.is_dir():
+                _eprint(f"Error: --folder requires a directory, not a file: {path}")
+                return 2
+            dest = publisher.publish_folder(path, rm_folder,
+                                            dry_run=args.dry_run, content_only=content_only)
+        elif path.is_dir():
+            dest = publisher.publish_folder(path, rm_folder,
+                                            dry_run=args.dry_run, content_only=content_only)
+        elif path.is_file():
+            dest = publisher.publish_page(path, rm_folder,
+                                          dry_run=args.dry_run, content_only=content_only)
+        else:
+            if args.json:
+                _emit_json(False, "note_not_found", f"File not found: {path}", None)
+            else:
+                _eprint(f"Error: {path} is not a file or folder")
             return 2
-        publisher.publish_folder(path, rm_folder, dry_run=args.dry_run)
-    elif path.is_dir():
-        publisher.publish_folder(path, rm_folder, dry_run=args.dry_run)
-    elif path.is_file():
-        publisher.publish_page(path, rm_folder, dry_run=args.dry_run)
-    else:
-        _eprint(f"Error: {path} is not a file or folder")
-        return 2
+    except Exception as e:  # noqa: BLE001
+        if args.json:
+            _emit_json(False, _classify_error(e), str(e), None)
+        else:
+            _eprint(f"Error: {e}")
+        return 1
+
+    if args.json:
+        _emit_json(True, "published", f"Published '{name}' to {dest}",
+                   {"name": name, "folder": rm_folder, "dest": dest})
     return 0
 
 
 def cmd_pull(args) -> int:
+    # Item 5: --vault takes precedence over config.vault.path.
+    vault_root = None
+    if args.vault:
+        vault_root = expand_user_path(args.vault).resolve()
+
     if args.pull_all:
         rm_folder = args.rm_folder or cfg.get("remarkable.folder")
-        vault = cfg.get("vault.path")
+        vault = args.vault or cfg.get("vault.path")
         listing = rmapi_client.ls(rm_folder)
         _eprint(listing)
-        # rmapi ls format: "[f]\t<name>" for files, "[d]\t<name>" for dirs.
-        # Parse the file marker separately and preserve the full name including
-        # spaces (Copilot #4).
         names = []
         for ln in listing.splitlines():
             ln = ln.strip()
             if not ln or not ln.startswith("[f]"):
                 continue
-            # Strip the "[f]\t" marker; the rest is the full file name.
             name = ln[3:].lstrip("\t ").strip()
             if name:
                 names.append(name)
-        vault_resolved = Path(os.path.expanduser(vault)).resolve()
+        vault_resolved = Path(os.path.expanduser(str(vault))).resolve()
         for name in names:
             md = vault_resolved / f"{name}.md"
             if md.is_file():
@@ -146,21 +245,84 @@ def cmd_pull(args) -> int:
     if not args.page_name:
         _eprint("Error: pull requires a <page-name> (or --all)")
         return 2
+
     md_path = args.md_path
     if md_path is None:
-        vault = cfg.get("vault.path")
-        md_path = str(Path(os.path.expanduser(vault)).resolve() / f"{args.page_name}.md")
+        vault = args.vault or cfg.get("vault.path")
+        md_path = str(Path(os.path.expanduser(str(vault))).resolve() / f"{args.page_name}.md")
     else:
-        md_path = str(expand_path(md_path))
-    retriever.retrieve(args.page_name, md_path, rm_folder=args.rm_folder)
+        # Item 6: use expand_user_path (no expandvars) for argv paths.
+        md_path = str(expand_user_path(md_path))
+        if not Path(md_path).is_absolute():
+            vault = args.vault or cfg.get("vault.path")
+            if vault:
+                md_path = str(Path(os.path.expanduser(str(vault))) / md_path)
+
+    # Item 11: containment check when --vault is provided.
+    if vault_root is not None:
+        resolved = Path(md_path).resolve()
+        if not resolved.is_relative_to(vault_root):
+            if args.json:
+                _emit_json(False, "path_containment",
+                           f"Path resolves outside vault: {resolved}", None)
+            else:
+                _eprint(f"Error: path resolves outside vault: {resolved}")
+            return 1
+
+    # Item 3: --emit json returns sections without writing to disk.
+    if args.emit == "json":
+        try:
+            result = retriever.retrieve_to_json(
+                args.page_name, rm_folder=args.rm_folder)
+        except Exception as e:  # noqa: BLE001
+            if args.json:
+                _emit_json(False, _classify_error(e), str(e), None)
+            else:
+                _eprint(f"Error: {e}")
+            return 1
+        if args.json:
+            _emit_json(True, "transcribed",
+                       f"Transcribed {result['annotated_pages']} page(s) from {args.page_name}",
+                       result)
+        else:
+            print(json.dumps(result, indent=2))
+        return 0
+
+    try:
+        retriever.retrieve(args.page_name, md_path, rm_folder=args.rm_folder)
+    except Exception as e:  # noqa: BLE001
+        if args.json:
+            _emit_json(False, _classify_error(e), str(e), None)
+        else:
+            _eprint(f"Error: {e}")
+        return 1
+
+    if args.json:
+        _emit_json(True, "pulled",
+                   f"Pulled annotations from {args.page_name} into {md_path}",
+                   {"page_name": args.page_name, "md_path": md_path})
     return 0
 
 
 def cmd_config(args) -> int:
+    if args.config_cmd == "set-key":
+        # Item 10: read API key from stdin (or getpass if TTY).
+        key = sys.stdin.readline().strip()
+        if not key and sys.stdin.isatty():
+            key = getpass.getpass("OpenRouter API key: ")
+        cfg.set("vision.openrouter_api_key", key)
+        _eprint("API key set. Use 'ormb config show' to verify.")
+        return 0
     if args.config_cmd == "set":
+        # Item 10: deprecation warning for legacy openrouter_api_key set.
+        resolved = resolve_key(args.key)
+        if resolved == "vision.openrouter_api_key":
+            _eprint("Warning: 'config set openrouter_api_key' is deprecated. "
+                    "Use 'config set-key' instead (reads from stdin, "
+                    "key not visible in argv).")
         cfg.set(args.key, args.value)
         # Mask secret values in confirmation output (Copilot #1).
-        display = cfg._mask(str(args.value)) if "api_key" in resolve_key(args.key) else args.value
+        display = cfg._mask(str(args.value)) if "api_key" in resolved else args.value
         _eprint(f"Set {args.key} = {display}")
     elif args.config_cmd == "show":
         print(cfg.show())
@@ -244,6 +406,97 @@ def cmd_setup(args) -> int:
     return subprocess.call([sys.executable, "-m", "playwright", "install", "chromium"])
 
 
+def cmd_doctor(args) -> int:
+    """Health check for dependencies and configuration (ARB item 2)."""
+    errors: list[str] = []
+
+    # rmapi
+    rmapi_path = rmapi_client.resolve_rmapi()
+    rmapi_found = rmapi_path is not None
+    rmapi_version = ""
+    if rmapi_found:
+        try:
+            result = subprocess.run(
+                [rmapi_path, "--version"], capture_output=True, text=True, timeout=10)
+            rmapi_version = (result.stdout or result.stderr or "").strip()
+        except Exception:  # noqa: BLE001
+            rmapi_version = "unknown"
+    else:
+        errors.append("rmapi binary not found")
+
+    # chromium
+    chromium_status = "ok"
+    try:
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            b = p.chromium.launch()
+            b.close()
+    except Exception as e:  # noqa: BLE001
+        msg = str(e).lower()
+        if "executable" in msg or "not found" in msg:
+            chromium_status = "missing"
+        else:
+            chromium_status = "missing-deps"
+        errors.append(f"Chromium: {chromium_status}")
+
+    # vault
+    vault_path = cfg.get("vault.path")
+    vault_status = "reachable"
+    if vault_path:
+        vp = Path(os.path.expanduser(str(vault_path)))
+        if vp.is_dir():
+            vault_status = "reachable"
+        else:
+            vault_status = "not_found"
+            errors.append(f"Vault path not found: {vp}")
+    else:
+        vault_status = "not_set"
+        errors.append("vault.path not configured")
+
+    # paired
+    rmapi_token = Path.home() / ".rmapi"
+    paired = rmapi_token.exists()
+    if not paired:
+        errors.append("reMarkable not paired (run 'ormb pair')")
+
+    # key_present
+    key = os.environ.get("OPENROUTER_API_KEY", "") or str(cfg.get("vision.openrouter_api_key") or "")
+    key_present = bool(key)
+    if not key_present:
+        errors.append("OPENROUTER_API_KEY not set")
+
+    report = {
+        "ok": len(errors) == 0,
+        "version": __version__,
+        "schema_version": 1,
+        "rmapi": {"path": rmapi_path or "", "version": rmapi_version, "found": rmapi_found},
+        "chromium": chromium_status,
+        "vault": vault_status,
+        "paired": paired,
+        "key_present": key_present,
+        "errors": errors,
+    }
+
+    if args.json:
+        print(json.dumps(report, indent=2))
+    else:
+        _eprint(f"ormb {__version__} (schema {report['schema_version']})")
+        _eprint(f"  rmapi:   {'found' if rmapi_found else 'MISSING'}"
+                f"{f' ({rmapi_path})' if rmapi_path else ''}"
+                f"{f' v{rmapi_version}' if rmapi_version else ''}")
+        _eprint(f"  chromium: {chromium_status}")
+        _eprint(f"  vault:    {vault_status}")
+        _eprint(f"  paired:   {'yes' if paired else 'NO'}")
+        _eprint(f"  api key:  {'present' if key_present else 'MISSING'}")
+        if errors:
+            _eprint(f"  errors ({len(errors)}):")
+            for e in errors:
+                _eprint(f"    - {e}")
+        else:
+            _eprint("  All checks passed.")
+    return 0 if not errors else 1
+
+
 def cmd_pair(args) -> int:
     if not rmapi_client.find_rmapi():
         _eprint("rmapi binary not found. Install it with: ormb setup --rmapi")
@@ -280,6 +533,7 @@ def main(argv: list[str] | None = None) -> int:
         "pair": cmd_pair,
         "ls": cmd_ls,
         "rm": cmd_rm,
+        "doctor": cmd_doctor,
     }
     handler = handlers.get(args.command)
     if handler is None:  # pragma: no cover - argparse enforces choices

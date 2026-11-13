@@ -237,11 +237,14 @@ def publish_page(
     *,
     dry_run: bool = False,
     vault_root: str | os.PathLike | None = None,
+    content_only: bool = False,
 ) -> str:
     """Publish a single markdown page to reMarkable.
 
     Renders markdown → PDF (Playwright), uploads via ``rmapi put``. Returns the
     destination path on reMarkable. ``dry_run`` renders the PDF but skips upload.
+    ``content_only`` passes ``--content-only`` to rmapi to replace the PDF
+    content while preserving annotations (ARB item 4).
     """
     if rm_folder is None:
         rm_folder = get("remarkable.folder")
@@ -257,7 +260,7 @@ def publish_page(
             print(f"[dry-run] skipping upload; PDF at {pdf_path}", file=sys.stderr)
             return f"[dry-run] {rm_folder}/{name}"
         print(f"Uploading to {rm_folder}...", file=sys.stderr)
-        dest = rmapi_client.put(pdf_path, rm_folder, dest_name=name)
+        dest = rmapi_client.put(pdf_path, rm_folder, dest_name=name, content_only=content_only)
         print(f"Published {name} to {dest} on your reMarkable", file=sys.stderr)
         return dest
     finally:
@@ -273,6 +276,7 @@ def publish_folder(
     *,
     dry_run: bool = False,
     vault_root: str | os.PathLike | None = None,
+    content_only: bool = False,
 ) -> str:
     """Publish all ``.md`` files in a folder as a combined PDF to reMarkable."""
     if rm_folder is None:
@@ -289,7 +293,7 @@ def publish_folder(
             print(f"[dry-run] skipping upload; PDF at {pdf_path}", file=sys.stderr)
             return f"[dry-run] {rm_folder}/{folder_name}"
         print(f"Uploading to {rm_folder}...", file=sys.stderr)
-        dest = rmapi_client.put(pdf_path, rm_folder, dest_name=folder_name)
+        dest = rmapi_client.put(pdf_path, rm_folder, dest_name=folder_name, content_only=content_only)
         print(f"Published {folder_name} to {dest} on your reMarkable", file=sys.stderr)
         return dest
     finally:

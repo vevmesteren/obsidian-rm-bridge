@@ -56,3 +56,78 @@ def test_render_mermaid_to_png_real(tmp_path):
     assert png.is_file() and png.stat().st_size > 100
     with png.open("rb") as f:
         assert f.read(4) == b"\x89PNG"
+
+
+# --- Item 8: Mermaid security hardening ---
+
+
+def test_mermaid_security_level_strict():
+    """Item 8: HTML template must use securityLevel: 'strict'."""
+    assert "securityLevel: 'strict'" in mr._HTML_TEMPLATE
+    assert "securityLevel: 'loose'" not in mr._HTML_TEMPLATE
+
+
+def test_mermaid_html_labels_false():
+    """Item 8: HTML template must set htmlLabels: false."""
+    assert "htmlLabels: false" in mr._HTML_TEMPLATE
+
+
+def test_route_handler_allows_data_uri():
+    """Item 8: route handler allows data: URIs."""
+    from unittest.mock import MagicMock
+    handler = mr._make_route_handler(vault_root=None)
+    route = MagicMock()
+    request = MagicMock(url="data:image/png;base64,abc")
+    handler(route, request)
+    route.continue_.assert_called_once()
+    route.abort.assert_not_called()
+
+
+def test_route_handler_allows_cdn():
+    """Item 8: route handler allows the mermaid CDN URL."""
+    from unittest.mock import MagicMock
+    handler = mr._make_route_handler(vault_root=None)
+    route = MagicMock()
+    request = MagicMock(url=mr.MERMAID_JS_URL)
+    handler(route, request)
+    route.continue_.assert_called_once()
+    route.abort.assert_not_called()
+
+
+def test_route_handler_blocks_unknown(tmp_path):
+    """Item 8: route handler aborts unknown URLs."""
+    from unittest.mock import MagicMock
+    handler = mr._make_route_handler(vault_root=tmp_path)
+    route = MagicMock()
+    request = MagicMock(url="https://evil.example.com/script.js")
+    handler(route, request)
+    route.abort.assert_called_once()
+    route.continue_.assert_not_called()
+
+
+def test_route_handler_blocks_out_of_vault_file(tmp_path):
+    """Item 8: route handler aborts file:// URIs outside the vault."""
+    from unittest.mock import MagicMock
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    outside = tmp_path / "outside.txt"
+    outside.write_text("secret")
+    handler = mr._make_route_handler(vault_root=vault)
+    route = MagicMock()
+    request = MagicMock(url=f"file://{outside}")
+    handler(route, request)
+    route.abort.assert_called_once()
+
+
+def test_route_handler_allows_in_vault_file(tmp_path):
+    """Item 8: route handler allows file:// URIs inside the vault."""
+    from unittest.mock import MagicMock
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    inside = vault / "image.png"
+    inside.write_bytes(b"\x89PNG")
+    handler = mr._make_route_handler(vault_root=vault)
+    route = MagicMock()
+    request = MagicMock(url=f"file://{inside}")
+    handler(route, request)
+    route.continue_.assert_called_once()

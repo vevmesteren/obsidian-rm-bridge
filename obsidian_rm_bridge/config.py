@@ -9,6 +9,7 @@ config or env vars (DC-3).
 from __future__ import annotations
 
 import os
+import stat
 from pathlib import Path
 
 try:  # Python 3.11+
@@ -43,6 +44,7 @@ CONFIG_PATH = Path(os.environ.get("ORB_CONFIG_PATH", CONFIG_DIR / "config.toml")
 DEFAULTS: dict = {
     "vault": {"path": "~/Documents/Obsidian"},
     "remarkable": {"folder": "/Obsidian"},
+    "rmapi": {"path": ""},
     "vision": {
         "model": "z-ai/glm-4.5v",
         "cross_verify_model": "gpt-4o",
@@ -188,7 +190,15 @@ def set(key: str, value: str, path: str | os.PathLike | None = None) -> None:
     # Write with owner-only permissions (0600) to protect API keys
     # from other local users (Copilot R2-1). Use os.open with the mode
     # at creation time to avoid a TOCTOU race (adversarial I1).
-    fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    # ARB item 9: O_NOFOLLOW prevents symlink attacks; fchmod ensures
+    # correct mode even if the file existed; S_ISREG/st_uid guards
+    # against replaced special files.
+    fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+    os.fchmod(fd, 0o600)
+    _st = os.fstat(fd)
+    if not stat.S_ISREG(_st.st_mode) or _st.st_uid != os.getuid():
+        os.close(fd)
+        raise PermissionError(f"config file {p} is not a regular file owned by current user")
     with os.fdopen(fd, "wb") as f:
         tomli_w.dump(data, f)
 
@@ -220,8 +230,14 @@ def init_config(path: str | os.PathLike | None = None) -> Path:
     p.parent.mkdir(parents=True, exist_ok=True)
     # Use 'xb' (exclusive create) — fails if the file already exists (Copilot #3).
     # The docstring says "overwrites nothing existing"; the code must match.
+    # ARB item 9: O_NOFOLLOW, fchmod, S_ISREG/st_uid hardening.
     try:
-        fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        os.fchmod(fd, 0o600)
+        _st = os.fstat(fd)
+        if not stat.S_ISREG(_st.st_mode) or _st.st_uid != os.getuid():
+            os.close(fd)
+            raise PermissionError(f"config file {p} is not a regular file owned by current user")
         with os.fdopen(fd, "wb") as f:
             tomli_w.dump(DEFAULTS, f)
     except FileExistsError:

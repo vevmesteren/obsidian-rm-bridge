@@ -123,3 +123,39 @@ def test_retrieve_missing_source_raises(tmp_path, tmp_config):
         retriever.retrieve("page", missing, rm_folder="/Obsidian", api_key="k")
     # File should NOT have been created
     assert not missing.exists()
+
+
+# --- Item 3: retrieve_to_json ---
+
+
+def test_retrieve_to_json_returns_sections(tmp_path, tmp_config):
+    """Item 3: retrieve_to_json returns sections, doc_id, total_pages, annotated_pages."""
+    with patch("obsidian_rm_bridge.retriever.rmapi_client.refresh"), \
+         patch("obsidian_rm_bridge.retriever.rmapi_client.geta", return_value="/tmp/fake.pdf"), \
+         patch("obsidian_rm_bridge.retriever.render_pdf_to_pngs",
+               return_value=["/tmp/p1.png", "/tmp/p2.png", "/tmp/p3.png"]), \
+         patch("obsidian_rm_bridge.retriever.vision_client.transcribe_pages",
+               return_value=[(1, "Note on page 1"), (3, "Note on page 3")]):
+        result = retriever.retrieve_to_json("my-page", rm_folder="/Obsidian", api_key="k")
+    assert result["doc_id"] == "my-page"
+    assert result["total_pages"] == 3
+    assert result["annotated_pages"] == 2
+    assert len(result["sections"]) == 2
+    assert result["sections"][0]["page"] == 1
+    assert "Note on page 1" in result["sections"][0]["text"]
+    assert result["sections"][1]["page"] == 3
+
+
+def test_retrieve_to_json_no_file_write(tmp_path, tmp_config):
+    """Item 3: retrieve_to_json must NOT write to disk."""
+    md = tmp_path / "page.md"
+    md.write_text("# Original\n")
+    original = md.read_text()
+    with patch("obsidian_rm_bridge.retriever.rmapi_client.refresh"), \
+         patch("obsidian_rm_bridge.retriever.rmapi_client.geta", return_value="/tmp/fake.pdf"), \
+         patch("obsidian_rm_bridge.retriever.render_pdf_to_pngs", return_value=["/tmp/p1.png"]), \
+         patch("obsidian_rm_bridge.retriever.vision_client.transcribe_pages",
+               return_value=[(1, "Note")]):
+        retriever.retrieve_to_json("page", rm_folder="/Obsidian", api_key="k")
+    # The source .md must be untouched
+    assert md.read_text() == original
