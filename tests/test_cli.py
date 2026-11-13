@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 from obsidian_rm_bridge import cli
 
-COMMANDS = ("publish", "pull", "config", "setup", "pair", "ls", "rm")
+COMMANDS = ("publish", "pull", "config", "setup", "pair", "ls", "rm", "doctor")
 
 
 def test_help_lists_all_commands():
@@ -135,7 +136,7 @@ def test_env_overrides_in_cli(tmp_config, monkeypatch, tmp_path):
     md = tmp_path / "x.md"
     md.write_text("# x\n")
     monkeypatch.setenv("ORB_RM_FOLDER", "/EnvFolder")
-    with patch("obsidian_rm_bridge.cli.publisher.publish_page", return_value="/EnvFolder/x") as m:
+    with patch("obsidian_rm_bridge.cli.publisher.publish_page", return_value=("/EnvFolder/x", 3)) as m:
         assert cli.main(["publish", str(md)]) == 0
         # publish_page was called with the env-derived rm_folder
         assert m.call_args[0][1] == "/EnvFolder"
@@ -182,10 +183,458 @@ def test_publish_resolves_relative_path_against_vault(tmp_config, tmp_path, monk
     other_dir = tmp_path / "obsidian-rm-bridge"
     other_dir.mkdir()
     monkeypatch.chdir(other_dir)
-    with patch("obsidian_rm_bridge.cli.publisher.publish_page") as m_pub:
+    with patch("obsidian_rm_bridge.cli.publisher.publish_page", return_value=("/test", 1)) as m_pub:
         assert cli.main(["publish", "concepts/architecture/c4-system-landscape.md"]) == 0
         called_path = Path(m_pub.call_args[0][0])
         assert called_path.is_absolute()
         assert called_path.name == "c4-system-landscape.md"
         assert "concepts" in str(called_path)
         assert "architecture" in str(called_path)
+
+
+# --- Item 1: --json result envelope on publish/pull ---
+
+
+def test_publish_json_success(tmp_config, tmp_path, capsys):
+    """Item 1: publish --json emits a JSON success envelope on stdout."""
+    md = tmp_path / "note.md"
+    md.write_text("# Note\n")
+    with patch("obsidian_rm_bridge.cli.publisher.publish_page", return_value=("/Obsidian/note", 3)):
+        rc = cli.main(["publish", str(md), "--json"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    import json
+    env = json.loads(out)
+    assert env["ok"] is True
+    assert env["code"] == "published"
+    assert "data" in env
+    assert env["data"]["name"] == "note"
+    assert env["data"]["pages"] == 3
+
+
+def test_publish_json_error_note_not_found(tmp_config, capsys):
+    """Item 1: publish --json on missing file returns note_not_found error code."""
+    rc = cli.main(["publish", "/nonexistent/path.md", "--json"])
+    assert rc == 2
+    out = capsys.readouterr().out
+    import json
+    env = json.loads(out)
+    assert env["ok"] is False
+    assert env["code"] == "note_not_found"
+
+
+def test_publish_json_doc_exists(tmp_config, tmp_path, capsys):
+    """Item 4: publish --json --on-exists fail returns doc_exists when doc already on reMarkable."""
+    md = tmp_path / "note.md"
+    md.write_text("# Note\n")
+    listing = "[f]\tnote\n"
+    with patch("obsidian_rm_bridge.cli.rmapi_client.ls", return_value=listing):
+        rc = cli.main(["publish", str(md), "--json"])
+    assert rc == 1
+    import json
+    env = json.loads(capsys.readouterr().out)
+    assert env["ok"] is False
+    assert env["code"] == "doc_exists"
+
+
+def test_publish_doc_exists_without_json(tmp_config, tmp_path, capsys):
+    """Cold review #4: doc_exists check runs even without --json (stderr + return 1)."""
+    md = tmp_path / "note.md"
+    md.write_text("# Note\n")
+    listing = "[f]\tnote\n"
+    with patch("obsidian_rm_bridge.cli.rmapi_client.ls", return_value=listing), \
+         patch("obsidian_rm_bridge.cli.publisher.publish_page", return_value=("/test", 1)) as m_pub:
+        rc = cli.main(["publish", str(md)])
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "already exists" in err
+    m_pub.assert_not_called()
+
+
+def test_publish_on_exists_content_only(tmp_config, tmp_path):
+    """Item 4: --on-exists content-only passes content_only=True to publisher."""
+    md = tmp_path / "note.md"
+    md.write_text("# Note\n")
+    with patch("obsidian_rm_bridge.cli.publisher.publish_page", return_value=("/Obsidian/note", 3)) as m:
+        cli.main(["publish", str(md), "--on-exists", "content-only"])
+        assert m.call_args.kwargs["content_only"] is True
+
+
+def test_pull_json_success(tmp_config, capsys):
+    """Item 1: pull --json emits a JSON success envelope on stdout."""
+    with patch("obsidian_rm_bridge.cli.retriever.retrieve") as m:
+        rc = cli.main(["pull", "page", "--md", "some.md", "--json"])
+    assert rc == 0
+    m.assert_called_once()
+    import json
+    env = json.loads(capsys.readouterr().out)
+    assert env["ok"] is True
+    assert env["code"] == "transcribed"
+
+
+# --- Item 2: doctor --json ---
+
+
+def test_doctor_json_returns_schema(tmp_config, capsys):
+    """Item 2: doctor --json returns the required health-check schema."""
+    with patch("obsidian_rm_bridge.cli.rmapi_client.resolve_rmapi", return_value=None):
+        rc = cli.main(["doctor", "--json"])
+    assert rc == 1  # errors present (rmapi missing, etc.)
+    import json
+    out = capsys.readouterr().out
+    report = json.loads(out)
+    assert "ok" in report
+    assert "version" in report
+    assert "schema_version" in report
+    assert "rmapi" in report
+    assert "path" in report["rmapi"]
+    assert "found" in report["rmapi"]
+    assert "chromium" in report
+    assert "vault" in report
+    assert "paired" in report
+    assert "key_present" in report
+    assert "errors" in report
+    assert isinstance(report["errors"], list)
+
+
+def test_doctor_human_readable(tmp_config, capsys):
+    """Item 2: doctor (no flag) prints human-readable output to stderr."""
+    with patch("obsidian_rm_bridge.cli.rmapi_client.resolve_rmapi", return_value=None):
+        cli.main(["doctor"])
+    err = capsys.readouterr().err
+    assert "ormb" in err
+    assert "rmapi" in err.lower()
+
+
+# --- Item 3: pull --emit json ---
+
+
+def test_pull_emit_json_returns_sections(tmp_config, capsys, tmp_path):
+    """Item 3: pull --emit json returns sections without writing to disk."""
+    md = tmp_path / "page.md"
+    md.write_text("# Page\n")
+    mock_result = {
+        "sections": [{"page": 1, "text": "## Annotations from reMarkable\n\n- Note 1\n"}],
+        "doc_id": "page",
+        "total_pages": 3,
+        "annotated_pages": 1,
+    }
+    with patch("obsidian_rm_bridge.cli.retriever.retrieve_to_json", return_value=mock_result) as m:
+        rc = cli.main(["pull", "page", "--md", str(md), "--emit", "json", "--json"])
+    assert rc == 0
+    m.assert_called_once()
+    import json
+    env = json.loads(capsys.readouterr().out)
+    assert env["ok"] is True
+    assert env["code"] == "transcribed"
+    assert env["data"]["sections"][0]["page"] == 1
+    assert env["data"]["total_pages"] == 3
+
+
+def test_pull_emit_json_no_file_write(tmp_config, tmp_path):
+    """Item 3: pull --emit json must NOT write to the source .md file."""
+    md = tmp_path / "page.md"
+    md.write_text("# Original\n")
+    original = md.read_text()
+    mock_result = {"sections": [{"page": 1, "text": "annotated"}], "doc_id": "page", "total_pages": 1, "annotated_pages": 1}
+    with patch("obsidian_rm_bridge.cli.retriever.retrieve_to_json", return_value=mock_result):
+        cli.main(["pull", "page", "--md", str(md), "--emit", "json"])
+    assert md.read_text() == original  # file untouched
+
+
+# --- Item 5: --vault flag ---
+
+
+def test_publish_vault_flag_precedence(tmp_config, tmp_path, monkeypatch):
+    """Item 5: --vault takes precedence over config.vault.path."""
+    from obsidian_rm_bridge import config as cfg
+    cfg.set("vault.path", str(tmp_path / "config_vault"))
+    vault_dir = tmp_path / "explicit_vault"
+    vault_dir.mkdir()
+    md = vault_dir / "note.md"
+    md.write_text("# Note\n")
+    # CWD is NOT the vault
+    monkeypatch.chdir(tmp_path)
+    with patch("obsidian_rm_bridge.cli.publisher.publish_page", return_value=("/test", 1)) as m:
+        cli.main(["publish", "note.md", "--vault", str(vault_dir)])
+        called_path = Path(m.call_args[0][0])
+        assert called_path.is_absolute()
+        assert called_path.name == "note.md"
+        assert "explicit_vault" in str(called_path)
+
+
+def test_pull_vault_flag_precedence(tmp_config, tmp_path, monkeypatch):
+    """Item 5: --vault takes precedence over config for pull md resolution."""
+    from obsidian_rm_bridge import config as cfg
+    cfg.set("vault.path", str(tmp_path / "config_vault"))
+    vault_dir = tmp_path / "explicit_vault"
+    vault_dir.mkdir()
+    (vault_dir / "page.md").write_text("# Page\n")
+    monkeypatch.chdir(tmp_path)
+    with patch("obsidian_rm_bridge.cli.retriever.retrieve") as m:
+        cli.main(["pull", "page", "--vault", str(vault_dir)])
+        called_md = Path(m.call_args[0][1])
+        assert "explicit_vault" in str(called_md)
+
+
+# --- Item 10: config set-key ---
+
+
+def test_config_set_key_stdin(tmp_config, monkeypatch):
+    """Item 10: config set-key reads the API key from stdin."""
+    import io
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    test_key = "sk-or-v1-secret123"
+    monkeypatch.setattr("sys.stdin", io.StringIO(test_key + "\n"))
+    assert cli.main(["config", "set-key"]) == 0
+    from obsidian_rm_bridge import config as cfg
+    assert cfg.get("vision.openrouter_api_key") == test_key
+
+
+def test_config_set_key_empty_stdin_rejected(tmp_config, monkeypatch, capsys):
+    """Cold review #10: config set-key with empty stdin returns error, does not erase key."""
+    import io
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.setattr("sys.stdin", io.StringIO("\n"))
+    assert cli.main(["config", "set-key"]) == 1
+    err = capsys.readouterr().err
+    assert "no key" in err.lower()
+
+
+def test_config_set_openrouter_deprecation(tmp_config, capsys):
+    """Item 10: legacy 'config set openrouter_api_key' prints deprecation warning."""
+    cli.main(["config", "set", "openrouter_api_key", "sk-secret"])
+    err = capsys.readouterr().err
+    assert "deprecated" in err.lower()
+    assert "set-key" in err
+
+
+# --- Item 11: --vault containment ---
+
+
+def test_publish_vault_containment_violation(tmp_config, tmp_path, capsys):
+    """Item 11: path outside --vault returns path_containment code."""
+    vault_dir = tmp_path / "vault"
+    vault_dir.mkdir()
+    outside = tmp_path / "outside.md"
+    outside.write_text("# Outside\n")
+    rc = cli.main(["publish", str(outside), "--vault", str(vault_dir), "--json"])
+    assert rc == 1
+    import json
+    env = json.loads(capsys.readouterr().out)
+    assert env["ok"] is False
+    assert env["code"] == "path_containment"
+
+
+def test_pull_vault_containment_violation(tmp_config, tmp_path, capsys):
+    """Item 11: --md outside --vault returns path_containment code."""
+    vault_dir = tmp_path / "vault"
+    vault_dir.mkdir()
+    outside = tmp_path / "outside.md"
+    outside.write_text("# Outside\n")
+    rc = cli.main(["pull", "page", "--md", str(outside), "--vault", str(vault_dir), "--json"])
+    assert rc == 1
+    import json
+    env = json.loads(capsys.readouterr().out)
+    assert env["ok"] is False
+    assert env["code"] == "path_containment"
+
+
+def test_publish_vault_traversal_attempt(tmp_config, tmp_path, capsys):
+    """Item 11: path traversal via ../ returns path_containment, no file opened."""
+    vault_dir = tmp_path / "vault"
+    vault_dir.mkdir()
+    secret = tmp_path / "secret.md"
+    secret.write_text("# Secret\n")
+    monkeypatch_cwd = tmp_path / "cwd"
+    monkeypatch_cwd.mkdir()
+    import os
+    old_cwd = os.getcwd()
+    os.chdir(monkeypatch_cwd)
+    try:
+        rc = cli.main(["publish", "../secret.md", "--vault", str(vault_dir), "--json"])
+    finally:
+        os.chdir(old_cwd)
+    assert rc == 1
+    import json
+    env = json.loads(capsys.readouterr().out)
+    assert env["code"] == "path_containment"
+
+
+# --- Item 6: expandvars removal on argv paths ---
+
+
+def test_publish_dollar_sign_filename(tmp_config, tmp_path, monkeypatch):
+    """Item 6: a filename containing $ must not have expandvars applied."""
+    vault_dir = tmp_path / "vault"
+    vault_dir.mkdir()
+    md = vault_dir / "Budget $HOME.md"
+    md.write_text("# Budget\n")
+    monkeypatch.setenv("HOME", "/tmp/should_not_expand")
+    with patch("obsidian_rm_bridge.cli.publisher.publish_page", return_value=("/test", 1)) as m:
+        cli.main(["publish", "Budget $HOME.md", "--vault", str(vault_dir)])
+        called_path = Path(m.call_args[0][0])
+        assert "$HOME" in called_path.name  # $HOME NOT expanded
+
+
+# --- Cold review: pull --all containment + JSON (#2, #3, #11) ---
+
+
+def test_pull_all_json_emits_envelope(tmp_config, tmp_path, capsys):
+    """Cold review #3: pull --all --json emits a JSON success envelope."""
+    from obsidian_rm_bridge import config as cfg
+    vault_dir = tmp_path / "vault"
+    vault_dir.mkdir()
+    (vault_dir / "alpha.md").write_text("# Alpha\n")
+    (vault_dir / "beta.md").write_text("# Beta\n")
+    cfg.set("vault.path", str(vault_dir))
+    listing = "[f]\talpha\n[f]\tbeta\n"
+    with patch("obsidian_rm_bridge.cli.rmapi_client.ls", return_value=listing), \
+         patch("obsidian_rm_bridge.cli.retriever.retrieve") as m_ret:
+        rc = cli.main(["pull", "--all", "--json"])
+    assert rc == 0
+    import json
+    env = json.loads(capsys.readouterr().out)
+    assert env["ok"] is True
+    assert env["code"] == "transcribed"
+    assert env["data"]["pages"] == 2
+    assert m_ret.call_count == 2
+
+
+def test_pull_all_containment_violation(tmp_config, tmp_path, capsys):
+    """Cold review #2/#11: pull --all --vault with a malicious listing name
+    (containing ``..``) that would resolve outside the vault returns
+    path_containment and retrieves nothing."""
+    vault_dir = tmp_path / "vault"
+    vault_dir.mkdir()
+    # Plant an .md outside the vault that the traversal name would reach.
+    (tmp_path / "secret.md").write_text("# Secret\n")
+    from obsidian_rm_bridge import config as cfg
+    cfg.set("vault.path", str(vault_dir))
+    listing = "[f]\t../secret\n"  # malicious name with traversal
+    with patch("obsidian_rm_bridge.cli.rmapi_client.ls", return_value=listing), \
+         patch("obsidian_rm_bridge.cli.retriever.retrieve") as m_ret:
+        rc = cli.main(["pull", "--all", "--vault", str(vault_dir), "--json"])
+    assert rc == 1
+    import json
+    env = json.loads(capsys.readouterr().out)
+    assert env["ok"] is False
+    assert env["code"] == "path_containment"
+    m_ret.assert_not_called()
+
+
+# --- Grok F6: error code tests (not_paired, rmapi_missing, chromium_missing,
+#     key_missing, rate_limited, vision_failed) ---
+
+
+def test_error_code_not_paired(tmp_config, tmp_path, capsys):
+    """Grok F6: not_paired error code fires through --json envelope."""
+    from obsidian_rm_bridge.rmapi_client import RmapiError
+    vault_dir = tmp_path / "vault"
+    vault_dir.mkdir()
+    md = vault_dir / "page.md"
+    md.write_text("# Page\n")
+    with patch("obsidian_rm_bridge.cli.retriever.retrieve",
+               side_effect=RmapiError("not paired: token missing")):
+        rc = cli.main(["pull", "page", "--md", str(md), "--vault", str(vault_dir), "--json"])
+    assert rc == 1
+    import json
+    env = json.loads(capsys.readouterr().out)
+    assert env["ok"] is False
+    assert env["code"] == "not_paired"
+
+
+def test_error_code_rmapi_missing(tmp_config, tmp_path, capsys):
+    """Grok F6: rmapi_missing error code fires through --json envelope."""
+    from obsidian_rm_bridge.rmapi_client import RmapiError
+    vault_dir = tmp_path / "vault"
+    vault_dir.mkdir()
+    md = vault_dir / "page.md"
+    md.write_text("# Page\n")
+    with patch("obsidian_rm_bridge.cli.retriever.retrieve",
+               side_effect=RmapiError("rmapi binary not found")):
+        rc = cli.main(["pull", "page", "--md", str(md), "--vault", str(vault_dir), "--json"])
+    assert rc == 1
+    import json
+    env = json.loads(capsys.readouterr().out)
+    assert env["ok"] is False
+    assert env["code"] == "rmapi_missing"
+
+
+def test_error_code_key_missing(tmp_config, tmp_path, monkeypatch, capsys):
+    """Grok F3/F6: key_missing fires for 'OPENROUTER_API_KEY is not set'."""
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    vault_dir = tmp_path / "vault"
+    vault_dir.mkdir()
+    md = vault_dir / "page.md"
+    md.write_text("# Page\n")
+    with patch("obsidian_rm_bridge.cli.retriever.retrieve",
+               side_effect=RuntimeError("OPENROUTER_API_KEY is not set")):
+        rc = cli.main(["pull", "page", "--md", str(md), "--vault", str(vault_dir), "--json"])
+    assert rc == 1
+    import json
+    env = json.loads(capsys.readouterr().out)
+    assert env["ok"] is False
+    assert env["code"] == "key_missing"
+
+
+def test_error_code_rate_limited(tmp_config, tmp_path, capsys):
+    """Grok F5/F6: rate_limited fires for HTTP 429."""
+    vault_dir = tmp_path / "vault"
+    vault_dir.mkdir()
+    md = vault_dir / "page.md"
+    md.write_text("# Page\n")
+    with patch("obsidian_rm_bridge.cli.retriever.retrieve",
+               side_effect=RuntimeError("HTTP 429: rate limit exceeded")):
+        rc = cli.main(["pull", "page", "--md", str(md), "--vault", str(vault_dir), "--json"])
+    assert rc == 1
+    import json
+    env = json.loads(capsys.readouterr().out)
+    assert env["ok"] is False
+    assert env["code"] == "rate_limited"
+
+
+def test_error_code_vision_failed(tmp_config, tmp_path, capsys):
+    """Grok F6: vision_failed fires when all pages fail transcription."""
+    vault_dir = tmp_path / "vault"
+    vault_dir.mkdir()
+    md = vault_dir / "page.md"
+    md.write_text("# Page\n")
+    with patch("obsidian_rm_bridge.cli.retriever.retrieve",
+               side_effect=RuntimeError("All pages failed transcription")):
+        rc = cli.main(["pull", "page", "--md", str(md), "--vault", str(vault_dir), "--json"])
+    assert rc == 1
+    import json
+    env = json.loads(capsys.readouterr().out)
+    assert env["ok"] is False
+    assert env["code"] == "vision_failed"
+
+
+def test_error_code_chromium_missing(tmp_config, tmp_path, capsys):
+    """Grok F4/F6: chromium_missing fires for Playwright 'executable' error
+    (Playwright Error is not a RuntimeError)."""
+    vault_dir = tmp_path / "vault"
+    vault_dir.mkdir()
+    md = vault_dir / "page.md"
+    md.write_text("# Page\n")
+    with patch("obsidian_rm_bridge.cli.publisher.publish_page",
+               side_effect=Exception("Executable doesn't exist at /chromium")):
+        rc = cli.main(["publish", str(md), "--vault", str(vault_dir), "--json"])
+    assert rc == 1
+    import json
+    env = json.loads(capsys.readouterr().out)
+    assert env["ok"] is False
+    assert env["code"] == "chromium_missing"
+
+
+# --- Grok F7: pull --all --emit json is blocked ---
+
+
+def test_pull_all_emit_json_blocked(tmp_config, capsys):
+    """Grok F7: pull --all --emit json returns error, does not write to disk."""
+    rc = cli.main(["pull", "--all", "--emit", "json", "--json"])
+    assert rc == 1
+    import json
+    env = json.loads(capsys.readouterr().out)
+    assert env["ok"] is False
+    assert env["code"] == "cli_error"

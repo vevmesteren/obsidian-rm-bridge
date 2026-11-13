@@ -105,3 +105,56 @@ def test_no_hardcoded_hermes_or_veviki_paths():
     assert "hermes" not in flat.lower()
     assert "veviki" not in flat.lower()
     assert "/Wiki" not in flat  # decoupled from the old hardcoded folder
+
+
+# --- Item 9: Config hardening (O_NOFOLLOW, fchmod, S_ISREG) ---
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Unix file permissions")
+def test_config_set_rejects_symlink(tmp_config):
+    """Item 9: config.set must reject a symlink target (O_NOFOLLOW)."""
+    import os
+    cfg_path = cfg.config_path()
+    cfg_path.parent.mkdir(parents=True, exist_ok=True)
+    # Create a symlink pointing to a file outside the config dir
+    target = cfg_path.parent / "target.toml"
+    target.write_text("malicious = true\n")
+    symlink = cfg_path  # the config path itself
+    os.symlink(target, symlink)
+    with pytest.raises((OSError, PermissionError)):
+        cfg.set("vision.model", "test")
+    # The symlink should NOT have been followed (content unchanged)
+    assert "malicious" in target.read_text()
+    assert "test" not in target.read_text()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Unix file permissions")
+def test_config_set_fchmod_0600_after_reset(tmp_config):
+    """Item 9: fchmod ensures 0600 even after re-setting an existing file."""
+    import os
+    cfg.set("vision.model", "first")
+    cfg_path = cfg.config_path()
+    # Tamper: make it world-readable
+    os.chmod(cfg_path, 0o644)
+    assert oct(os.stat(cfg_path).st_mode & 0o777) == "0o644"
+    # Re-set should restore 0600 via fchmod
+    cfg.set("vision.model", "second")
+    mode = oct(os.stat(cfg_path).st_mode & 0o777)
+    assert mode == "0o600", f"config file is {mode}, expected 0o600"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Unix file permissions")
+def test_init_config_uses_no_follow(tmp_config):
+    """Item 9: init_config uses O_NOFOLLOW (no crash, file is 0600)."""
+    import os
+    cfg.init_config()
+    cfg_path = cfg.config_path()
+    mode = oct(os.stat(cfg_path).st_mode & 0o777)
+    assert mode == "0o600"
+
+
+def test_config_has_rmapi_path_default(tmp_config):
+    """Item 7: DEFAULTS should include rmapi.path."""
+    loaded = cfg.load_config()
+    assert "rmapi" in loaded
+    assert "path" in loaded["rmapi"]

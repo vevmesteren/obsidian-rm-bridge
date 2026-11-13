@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -14,7 +15,8 @@ def _ok(stdout="", stderr=""):
 
 
 def test_refresh_calls_rmapi_refresh():
-    with patch("obsidian_rm_bridge.rmapi_client.subprocess.run", return_value=_ok()) as m:
+    with patch("obsidian_rm_bridge.rmapi_client.resolve_rmapi", return_value="rmapi"), \
+         patch("obsidian_rm_bridge.rmapi_client.subprocess.run", return_value=_ok()) as m:
         rmapi_client.refresh()
         args = m.call_args[0][0]
         assert args[0] == "rmapi"
@@ -31,7 +33,8 @@ def test_refresh_failure_raises():
 def test_geta_downloads_and_finds_pdf(tmp_path):
     expected = tmp_path / "test-page.pdf"
     expected.write_bytes(b"%PDF-1.4 dummy")
-    with patch("obsidian_rm_bridge.rmapi_client.subprocess.run", return_value=_ok()) as m:
+    with patch("obsidian_rm_bridge.rmapi_client.resolve_rmapi", return_value="rmapi"), \
+         patch("obsidian_rm_bridge.rmapi_client.subprocess.run", return_value=_ok()) as m:
         out = rmapi_client.geta("/Obsidian/test-page", tmp_path)
         cmd = m.call_args[0][0]
         assert cmd[0] == "rmapi"
@@ -51,7 +54,8 @@ def test_geta_failure_raises(tmp_path):
 def test_put_never_uses_force(tmp_path):
     pdf = tmp_path / "doc.pdf"
     pdf.write_bytes(b"%PDF-1.4")
-    with patch("obsidian_rm_bridge.rmapi_client.subprocess.run", return_value=_ok()) as m:
+    with patch("obsidian_rm_bridge.rmapi_client.resolve_rmapi", return_value="rmapi"), \
+         patch("obsidian_rm_bridge.rmapi_client.subprocess.run", return_value=_ok()) as m:
         dest = rmapi_client.put(str(pdf), "/Obsidian")
         cmd = m.call_args[0][0]
         assert cmd[0] == "rmapi"
@@ -113,7 +117,8 @@ def test_ls_returns_stdout():
 
 
 def test_rm_calls_rmapi_rm():
-    with patch("obsidian_rm_bridge.rmapi_client.subprocess.run", return_value=_ok()) as m:
+    with patch("obsidian_rm_bridge.rmapi_client.resolve_rmapi", return_value="rmapi"), \
+         patch("obsidian_rm_bridge.rmapi_client.subprocess.run", return_value=_ok()) as m:
         rmapi_client.rm("/Obsidian/page")
         cmd = m.call_args[0][0]
         assert cmd[0] == "rmapi"
@@ -122,7 +127,8 @@ def test_rm_calls_rmapi_rm():
 
 
 def test_mkdir_calls_rmapi_mkdir():
-    with patch("obsidian_rm_bridge.rmapi_client.subprocess.run", return_value=_ok()) as m:
+    with patch("obsidian_rm_bridge.rmapi_client.resolve_rmapi", return_value="rmapi"), \
+         patch("obsidian_rm_bridge.rmapi_client.subprocess.run", return_value=_ok()) as m:
         rmapi_client.mkdir("/Obsidian")
         cmd = m.call_args[0][0]
         assert cmd[0] == "rmapi"
@@ -133,3 +139,83 @@ def test_missing_binary_raises():
     with patch("obsidian_rm_bridge.rmapi_client.subprocess.run",
                side_effect=FileNotFoundError("rmapi")), pytest.raises(rmapi_client.RmapiError):
         rmapi_client.ls("/")
+
+
+# --- Item 4: content-only put ---
+
+
+def test_put_content_only_flag(tmp_path):
+    """Item 4: put(content_only=True) passes --content-only to rmapi."""
+    pdf = tmp_path / "doc.pdf"
+    pdf.write_bytes(b"%PDF-1.4")
+    with patch("obsidian_rm_bridge.rmapi_client.subprocess.run", return_value=_ok()) as m:
+        rmapi_client.put(str(pdf), "/Obsidian", dest_name="doc", content_only=True)
+        put_calls = [call for call in m.call_args_list if call.args[0][1] == "put"]
+        assert put_calls
+        cmd = put_calls[0].args[0]
+        assert "--content-only" in cmd
+
+
+def test_put_no_content_only_by_default(tmp_path):
+    """Item 4: put() without content_only does NOT pass --content-only."""
+    pdf = tmp_path / "doc.pdf"
+    pdf.write_bytes(b"%PDF-1.4")
+    with patch("obsidian_rm_bridge.rmapi_client.subprocess.run", return_value=_ok()) as m:
+        rmapi_client.put(str(pdf), "/Obsidian")
+        put_calls = [call for call in m.call_args_list if call.args[0][1] == "put"]
+        assert put_calls
+        cmd = put_calls[0].args[0]
+        assert "--content-only" not in cmd
+
+
+# --- Item 7: rmapi resolution fallback ---
+
+
+def test_resolve_rmapi_env(tmp_path, monkeypatch):
+    """Item 7: ORB_RMAPI_BIN env takes priority."""
+    fake_bin = tmp_path / "fake_rmapi"
+    fake_bin.write_text("#!/bin/sh\necho rmapi")
+    fake_bin.chmod(0o755)
+    monkeypatch.setenv("ORB_RMAPI_BIN", str(fake_bin))
+    assert rmapi_client.resolve_rmapi() == str(fake_bin)
+
+
+def test_resolve_rmapi_config(tmp_path, monkeypatch):
+    """Item 7: config.rmapi.path is step 2."""
+    fake_bin = tmp_path / "cfg_rmapi"
+    fake_bin.write_text("#!/bin/sh\necho rmapi")
+    fake_bin.chmod(0o755)
+    monkeypatch.delenv("ORB_RMAPI_BIN", raising=False)
+    with patch("obsidian_rm_bridge.config.get", return_value=str(fake_bin)):
+        result = rmapi_client.resolve_rmapi()
+    assert result == str(fake_bin)
+
+
+def test_resolve_rmapi_which(monkeypatch):
+    """Item 7: shutil.which is step 3."""
+    monkeypatch.delenv("ORB_RMAPI_BIN", raising=False)
+    with patch("obsidian_rm_bridge.rmapi_client.shutil.which", return_value="/usr/bin/rmapi"), \
+         patch("obsidian_rm_bridge.config.get", return_value=""):
+        assert rmapi_client.resolve_rmapi() == "/usr/bin/rmapi"
+
+
+def test_resolve_rmapi_fallback(tmp_path, monkeypatch):
+    """Item 7: ~/.local/bin/rmapi is step 4."""
+    monkeypatch.delenv("ORB_RMAPI_BIN", raising=False)
+    fake_bin = tmp_path / ".local" / "bin" / "rmapi"
+    fake_bin.parent.mkdir(parents=True)
+    fake_bin.write_text("#!/bin/sh\necho rmapi")
+    fake_bin.chmod(0o755)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    with patch("obsidian_rm_bridge.rmapi_client.shutil.which", return_value=None), \
+         patch("obsidian_rm_bridge.config.get", return_value=""):
+        assert rmapi_client.resolve_rmapi() == str(fake_bin)
+
+
+def test_resolve_rmapi_not_found(monkeypatch):
+    """Item 7: returns None when nothing is found."""
+    monkeypatch.delenv("ORB_RMAPI_BIN", raising=False)
+    with patch("obsidian_rm_bridge.rmapi_client.shutil.which", return_value=None), \
+         patch("obsidian_rm_bridge.config.get", return_value=""), \
+         patch("pathlib.Path.home", return_value=Path("/nonexistent_home")):
+        assert rmapi_client.resolve_rmapi() is None

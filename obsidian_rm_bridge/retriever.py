@@ -24,6 +24,7 @@ __all__ = [
     "format_annotations",
     "render_pdf_to_pngs",
     "retrieve",
+    "retrieve_to_json",
 ]
 
 
@@ -138,3 +139,50 @@ def retrieve(
     else:
         print(f"No annotations found on {page_name}", file=sys.stderr)
     return section
+
+
+def retrieve_to_json(
+    page_name: str,
+    *,
+    rm_folder: str | None = None,
+    api_key: str | None = None,
+    model: str | None = None,
+) -> dict:
+    """Retrieve pipeline that returns sections as JSON data (ARB item 3).
+
+    Like :func:`retrieve` but writes nothing to disk. Returns a dict with:
+    ``sections`` (list of ``{"page": N, "text": "..."}``),
+    ``doc_id``, ``total_pages``, ``annotated_pages``.
+    """
+    if rm_folder is None:
+        rm_folder = get("remarkable.folder")
+    if model is None:
+        model = get("vision.model")
+    if api_key is None:
+        api_key = get("vision.openrouter_api_key")
+
+    rm_path = f"{rm_folder.rstrip('/')}/{page_name}"
+    with tempfile.TemporaryDirectory() as tmpdir:
+        print("Refreshing reMarkable cloud index...", file=sys.stderr)
+        rmapi_client.refresh()
+
+        print(f"Downloading annotated PDF from {rm_path}...", file=sys.stderr)
+        pdf_path = rmapi_client.geta(rm_path, tmpdir)
+
+        print("Rendering PDF pages to PNG...", file=sys.stderr)
+        png_paths = render_pdf_to_pngs(pdf_path, tmpdir)
+        total_pages = len(png_paths)
+
+        print(f"Transcribing annotations via {model}...", file=sys.stderr)
+        annotations = vision_client.transcribe_pages(png_paths, api_key, model=model)
+
+    sections = [
+        {"page": page_num, "text": format_annotations([(page_num, text)], date_str=datetime.date.today().isoformat())}
+        for page_num, text in annotations
+    ]
+    return {
+        "sections": sections,
+        "doc_id": page_name,
+        "total_pages": total_pages,
+        "annotated_pages": len(sections),
+    }

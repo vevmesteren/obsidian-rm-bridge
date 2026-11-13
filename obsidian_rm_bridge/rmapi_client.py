@@ -1,7 +1,8 @@
 """Thin subprocess wrapper around the rmapi (ddvk fork) binary.
 
 All reMarkable cloud operations go through here (DC-2). ``put`` never uses
-``--force`` (DC-8) — it would create duplicates rather than replacements.
+``--force`` (DC-8) — that **destroys annotations**, not creates duplicates
+(corrected per upstream rmapi docs, ARB item 4).
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ __all__ = [
     "pair",
     "put",
     "refresh",
+    "resolve_rmapi",
     "rm",
 ]
 
@@ -33,21 +35,62 @@ class RmapiError(RuntimeError):
     """rmapi invocation failed."""
 
 
+def resolve_rmapi() -> str | None:
+    """Resolve rmapi binary path in priority order (ARB item 7):
+
+    1. ``ORB_RMAPI_BIN`` env var (if the file exists)
+    2. ``config.rmapi.path`` (if set and the file exists)
+    3. ``shutil.which("rmapi")`` (on PATH)
+    4. ``~/.local/bin/rmapi`` (fallback, if the file exists)
+
+    Returns the resolved path or ``None`` if nothing is found.
+    """
+    # 1. ORB_RMAPI_BIN env
+    env_bin = os.environ.get("ORB_RMAPI_BIN")
+    if env_bin and Path(env_bin).is_file():
+        return env_bin
+    # 2. config.rmapi.path
+    try:
+        from .config import get as cfg_get
+        cfg_path = cfg_get("rmapi.path")
+    except Exception:  # noqa: BLE001 — config may not be available
+        cfg_path = None
+    if cfg_path:
+        p = Path(os.path.expanduser(str(cfg_path)))
+        if p.is_file():
+            return str(p)
+    # 3. shutil.which("rmapi")
+    found = shutil.which("rmapi")
+    if found:
+        return found
+    # 4. ~/.local/bin/rmapi
+    fallback = Path.home() / ".local" / "bin" / "rmapi"
+    if fallback.is_file():
+        return str(fallback)
+    return None
+
+
 def find_rmapi() -> str | None:
-    """Return the rmapi binary path, or ``None`` if not on PATH."""
-    return shutil.which(RMAPI_BIN) if isinstance(RMAPI_BIN, str) else None
+    """Return the rmapi binary path, or ``None`` if not found."""
+    return resolve_rmapi()
+
+
+def _resolved_bin() -> str:
+    """Return the resolved rmapi path, falling back to ``"rmapi"`` for _run."""
+    return resolve_rmapi() or RMAPI_BIN
 
 
 def _run(args: list[str], *, timeout: int = 120, cwd: str | os.PathLike | None = None,
          capture: bool = True) -> subprocess.CompletedProcess:
     """Run rmapi with ``args``; raise :class:`RmapiError` on non-zero exit."""
-    cmd = [RMAPI_BIN, *args]
+    bin_path = _resolved_bin()
+    cmd = [bin_path, *args]
     try:
         result = subprocess.run(
             cmd, check=False, capture_output=capture, text=True, timeout=timeout, cwd=cwd
         )
     except FileNotFoundError as e:
-        raise RmapiError(f"rmapi binary not found ({RMAPI_BIN})") from e
+        raise RmapiError(f"rmapi binary not found ({bin_path})") from e
     if result.returncode != 0:
         err = (result.stderr or result.stdout or "")[:300]
         raise RmapiError(f"rmapi {' '.join(args)} failed: {err}")
@@ -82,13 +125,18 @@ def geta(page_path: str, output_dir: str | os.PathLike) -> str:
     raise RmapiError(f"rmapi geta produced no PDF in {output_dir}")
 
 
-def put(pdf_path: str, dest_folder: str, dest_name: str | None = None) -> str:
+def put(pdf_path: str, dest_folder: str, dest_name: str | None = None, *,
+        content_only: bool = False) -> str:
     """Upload a PDF to reMarkable via ``rmapi put``.
 
-    Never uses ``--force`` (DC-8) — that creates duplicates, not replacements.
+    Never uses ``--force`` (DC-8) — that **destroys annotations**, not creates
+    duplicates (corrected per upstream rmapi docs, ARB item 4).
     rmapi takes the *folder only* as the destination and uses the source
     filename; ``dest_name`` overrides the source filename when needed.
     Returns the destination path ``<dest_folder>/<dest_name>``.
+
+    When ``content_only=True``, passes ``--content-only`` to rmapi so the PDF
+    content is replaced while preserving handwritten annotations (ARB item 4).
 
     The destination folder is created if it doesn't exist (Copilot #9).
     The PDF is staged under ``dest_name`` so rmapi uploads it with the correct
@@ -116,7 +164,10 @@ def put(pdf_path: str, dest_folder: str, dest_name: str | None = None) -> str:
     with tempfile.TemporaryDirectory(prefix="ormb-stage-") as stage_dir:
         staged = Path(stage_dir) / f"{dest_name}.pdf"
         shutil.copy2(str(src), str(staged))
-        _run(["put", str(staged), dest_folder], timeout=120)
+        put_args = ["put", str(staged), dest_folder]
+        if content_only:
+            put_args.append("--content-only")
+        _run(put_args, timeout=120)
     return f"{dest_folder.rstrip('/')}/{dest_name}"
 
 
@@ -148,4 +199,5 @@ def pair() -> int:
         f"code. rmapi will prompt for it below.",
         file=sys.stderr,
     )
-    return subprocess.run([RMAPI_BIN], check=False).returncode
+    resolved = resolve_rmapi() or RMAPI_BIN
+    return subprocess.run([resolved], check=False).returncode

@@ -6,7 +6,7 @@ import os
 import re
 from pathlib import Path
 
-__all__ = ["ensure_dir", "expand_path", "list_md_files", "strip_frontmatter"]
+__all__ = ["ensure_dir", "expand_path", "expand_user_path", "list_md_files", "strip_frontmatter"]
 
 
 def strip_frontmatter(content: str) -> str:
@@ -20,8 +20,22 @@ def strip_frontmatter(content: str) -> str:
 
 
 def expand_path(path: str | os.PathLike) -> Path:
-    """Expand ``~`` and environment variables, returning a ``Path``."""
+    """Expand ``~`` and environment variables, returning a ``Path``.
+
+    Used for **config values** — argv paths should use :func:`expand_user_path`
+    instead so that ``$`` in filenames (e.g. ``Budget $HOME.md``) is not
+    expanded (ARB item 6).
+    """
     return Path(os.path.expandvars(os.path.expanduser(str(path))))
+
+
+def expand_user_path(path: str | os.PathLike) -> Path:
+    """Expand ``~`` only (NO ``expandvars``), returning a ``Path``.
+
+    Used for CLI argv paths (``--md``, ``--vault``) so that filenames
+    containing ``$`` are not mangled by variable expansion (ARB item 6).
+    """
+    return Path(os.path.expanduser(str(path)))
 
 
 def ensure_dir(path: str | os.PathLike) -> Path:
