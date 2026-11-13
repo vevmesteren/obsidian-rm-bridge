@@ -16,6 +16,7 @@ export const DEFAULT_SETTINGS = {
   rmFolder: "/Obsidian",
   visionModel: "",
   automountRoot: "/mnt",
+  pullConsentGiven: false,
 };
 
 export type OrmbSettingsWithDefaults = typeof DEFAULT_SETTINGS;

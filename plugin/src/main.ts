@@ -5,18 +5,25 @@
 // inside WSL home. Every CLI invocation goes through an ExecutionAdapter that
 // launches `wsl.exe --exec` with argv only — never a shell.
 
-import { Notice, Plugin, TFile } from "obsidian";
+import { Modal, Notice, Plugin, TFile } from "obsidian";
 import { WslAdapter, type AppRef } from "./wsl-adapter.ts";
 import { VaultBridge, type VaultApp } from "./vault.ts";
+import {
+  applyMarkerBlock,
+  buildConsentBody,
+  buildMarkerBlock,
+  DEFAULT_VISION_MODEL,
+} from "./marker-block.ts";
 import {
   DEFAULT_SETTINGS,
   OrmbSettingsTab,
   type OrmbSettingsWithDefaults,
 } from "./settings.ts";
-import type { OrmbResult, PlatformConfig } from "./types.ts";
+import type { OrmbPullData, OrmbResult, PlatformConfig } from "./types.ts";
 
 const PUBLISH_NOTICE_OK = (msg: string) => `Published ✓ ${msg}`;
 const PUBLISH_BUSY = "Publish to reMarkable already in progress — please wait.";
+const PULL_BUSY = "Pull already in progress — please wait.";
 
 /** Map an OrmbResult code to a user-facing Notice. */
 function noticeForResult(res: OrmbResult): void {
@@ -68,6 +75,15 @@ export default class ObsidianRmBridgePlugin extends Plugin {
       },
     });
 
+    this.addCommand({
+      id: "pull-annotations",
+      name: "Pull annotations from reMarkable",
+      editorCallback: (_editor, ctx) => {
+        const file = ctx.file ?? this.app.workspace.getActiveFile();
+        if (file) void this.pullAnnotations(file);
+      },
+    });
+
     this.addRibbonIcon("up-arrow-with-tail", "Publish to reMarkable", () => {
       const file = this.app.workspace.getActiveFile();
       if (file) void this.publish(file);
@@ -81,6 +97,12 @@ export default class ObsidianRmBridgePlugin extends Plugin {
             .setTitle("Publish to reMarkable")
             .setIcon("up-arrow-with-tail")
             .onClick(() => void this.publish(file));
+        });
+        menu.addItem((item) => {
+          item
+            .setTitle("Pull annotations from reMarkable")
+            .setIcon("down-arrow-with-tail")
+            .onClick(() => void this.pullAnnotations(file));
         });
       }),
     );
@@ -184,6 +206,102 @@ export default class ObsidianRmBridgePlugin extends Plugin {
     } catch (err) {
       if (always) new Notice(`ormb doctor failed: ${(err as Error).message}`);
     }
+  }
+
+  /** Pull handwritten annotations from reMarkable into the note. Single-flight guarded. */
+  async pullAnnotations(file: TFile): Promise<void> {
+    if (this.publishing) {
+      new Notice(PULL_BUSY);
+      return;
+    }
+
+    // Path safety (same guard as publish).
+    const segments = file.path.split("/");
+    if (!file.path || file.path.includes("\0") || segments.includes("..")) {
+      new Notice("Refusing to pull: invalid note path.");
+      return;
+    }
+
+    // First-run consent: OpenRouter egress disclosure. Sticky once given.
+    if (!this.settings.pullConsentGiven) {
+      const consent = await this.showPullConsentModal(file);
+      if (!consent) return;
+      this.settings.pullConsentGiven = true;
+      await this.saveSettings();
+    }
+
+    this.publishing = true;
+    try {
+      const vaultRoot = this.vaultBridge.vaultPathLinux;
+      const args = [
+        "pull",
+        "--emit",
+        "json",
+        "--md",
+        file.path,
+        "--vault",
+        vaultRoot,
+        "--json",
+      ];
+      // Best-effort status bar from stderr lines (transcription progress).
+      const progressLines: string[] = [];
+      const res = await this.adapter.spawn(args, (line) => {
+        progressLines.push(line);
+      });
+      if (res.ok && res.code === "transcribed" && res.data) {
+        const pullData = res.data as OrmbPullData;
+        const markerBlock = buildMarkerBlock(pullData);
+        // Atomic, undo-able write: vault.process reads current content and
+        // applies the replace-not-duplicate transform in one step.
+        await this.app.vault.process(file, (current) =>
+          applyMarkerBlock(current, markerBlock, pullData),
+        );
+        new Notice(`Pulled ${pullData.annotated_pages} annotation(s) ✓`);
+      } else {
+        noticeForResult(res);
+      }
+    } catch (err) {
+      new Notice(`Pull failed: ${(err as Error).message}`);
+    } finally {
+      this.publishing = false;
+    }
+  }
+
+  /** First-run consent modal for the pull path (OpenRouter egress). */
+  private showPullConsentModal(file: TFile): Promise<boolean> {
+    return new Promise((resolve) => {
+      const modal = new Modal(this.app);
+      modal.titleEl.setText("Pull annotations from reMarkable");
+      const content = modal.contentEl;
+      const body = buildConsentBody(
+        file.basename,
+        this.settings.visionModel || DEFAULT_VISION_MODEL,
+      );
+      content.createEl("p", { text: body });
+      content.createEl("p", {
+        text:
+          "This is disclosed and consented to on first pull. " +
+          "You can revoke by clearing the consent toggle in settings.",
+        cls: "setting-item-description",
+      });
+
+      const btnBar = content.createDiv({ cls: "modal-button-bar" });
+      const cancelBtn = btnBar.createEl("button", { text: "Cancel" });
+      const okBtn = btnBar.createEl("button", {
+        text: "Pull annotations",
+        cls: "mod-cta",
+      });
+
+      cancelBtn.onclick = () => {
+        modal.close();
+        resolve(false);
+      };
+      okBtn.onclick = () => {
+        modal.close();
+        resolve(true);
+      };
+      modal.open();
+    });
   }
 
   private async saveActiveEditorIfDirty(): Promise<void> {
