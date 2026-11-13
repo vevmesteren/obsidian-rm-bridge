@@ -7,7 +7,7 @@
 
 import { Notice, Plugin, TFile } from "obsidian";
 import { WslAdapter, type AppRef } from "./wsl-adapter.ts";
-import { VaultBridge } from "./vault.ts";
+import { VaultBridge, type VaultApp } from "./vault.ts";
 import {
   DEFAULT_SETTINGS,
   OrmbSettingsTab,
@@ -52,7 +52,7 @@ export default class ObsidianRmBridgePlugin extends Plugin {
 
     this.adapter = new WslAdapter(this.platformConfig(), this.app as unknown as AppRef);
     this.vaultBridge = new VaultBridge(
-      this.app as unknown as { vault: { getBasePath(): string } },
+      this.app as unknown as VaultApp,
       this.platformConfig(),
     );
 
@@ -122,7 +122,7 @@ export default class ObsidianRmBridgePlugin extends Plugin {
   refreshAdapter(): void {
     this.adapter = new WslAdapter(this.platformConfig(), this.app as unknown as AppRef);
     this.vaultBridge = new VaultBridge(
-      this.app as unknown as { vault: { getBasePath(): string } },
+      this.app as unknown as VaultApp,
       this.platformConfig(),
     );
   }
@@ -135,7 +135,10 @@ export default class ObsidianRmBridgePlugin extends Plugin {
     }
 
     // Reject suspicious paths before handing them to the child process.
-    if (!file.path || file.path.includes("\0") || file.path.includes("..")) {
+    // Check for ".." as a path segment, not substring (avoids false-positive
+    // on filenames like "foo..bar.md") (grok).
+    const segments = file.path.split("/");
+    if (!file.path || file.path.includes("\0") || segments.includes("..")) {
       new Notice("Refusing to publish: invalid note path.");
       return;
     }
@@ -153,6 +156,8 @@ export default class ObsidianRmBridgePlugin extends Plugin {
         "--vault",
         vaultRoot,
         "--json",
+        "--on-exists",
+        "fail",
         "--rm-folder",
         this.settings.rmFolder,
       ];

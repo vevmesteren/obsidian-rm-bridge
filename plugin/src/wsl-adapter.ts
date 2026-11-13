@@ -11,6 +11,10 @@ import type {
   PlatformConfig,
 } from "./types.ts";
 
+/** Absolute path to wsl.exe — prevents PATH hijacking (grok C3, ARB R1). */
+const WSL_EXE =
+  (process.env.SystemRoot ?? "C:\\Windows") + "\\System32\\wsl.exe";
+
 /** Minimal App reference (avoids importing the full `obsidian` types here). */
 export interface AppRef {
   vault?: { getBasePath?(): string };
@@ -79,48 +83,28 @@ export class WslAdapter implements ExecutionAdapter {
 
   async doctor(): Promise<DoctorResult> {
     const o = await this.spawnRaw(["doctor", "--json"]);
-    if (o.exitCode !== 0) {
-      return {
-        ok: false,
-        version: "",
-        schema_version: 0,
-        rmapi: { path: "", version: "", found: false },
-        chromium: "unknown",
-        vault: "unknown",
-        paired: false,
-        key_present: false,
-        errors: [o.stderr.trim() || `ormb exited with code ${o.exitCode}`],
-      };
-    }
+    // Parse stdout JSON regardless of exit code — doctor --json emits
+    // structured JSON even when unhealthy (exit 1). Only fall back to
+    // empty fields if no JSON present (grok C1).
     const text = o.stdout.trim();
-    if (text === "") {
-      return {
-        ok: false,
-        version: "",
-        schema_version: 0,
-        rmapi: { path: "", version: "", found: false },
-        chromium: "unknown",
-        vault: "unknown",
-        paired: false,
-        key_present: false,
-        errors: ["doctor produced no output"],
-      };
+    if (text !== "") {
+      try {
+        return JSON.parse(text) as DoctorResult;
+      } catch {
+        // fall through to empty result below
+      }
     }
-    try {
-      return JSON.parse(text) as DoctorResult;
-    } catch {
-      return {
-        ok: false,
-        version: "",
-        schema_version: 0,
-        rmapi: { path: "", version: "", found: false },
-        chromium: "unknown",
-        vault: "unknown",
-        paired: false,
-        key_present: false,
-        errors: [`doctor returned non-JSON: ${text}`],
-      };
-    }
+    return {
+      ok: false,
+      version: "",
+      schema_version: 0,
+      rmapi: { path: "", version: "", found: false },
+      chromium: "unknown",
+      vault: "unknown",
+      paired: false,
+      key_present: false,
+      errors: [o.stderr.trim() || `doctor exited with code ${o.exitCode}`],
+    };
   }
 
   translateVaultRoot(windowsPath: string): string {
@@ -148,11 +132,15 @@ export class WslAdapter implements ExecutionAdapter {
       };
       // Vision model is a config/env value (`ORB_VISION_MODEL`), not a CLI flag.
       // Inject it into the child env when set so the CLI picks it up (pull path).
+      // WSL only forwards vars listed in WSLENV — add ORB_VISION_MODEL so it
+      // crosses the Windows→Linux boundary (grok).
       if (this.config.visionModel && this.config.visionModel.trim() !== "") {
         env.ORB_VISION_MODEL = this.config.visionModel;
+        env.WSLENV = `${env.WSLENV ?? ""}${env.WSLENV ? ":" : ""}ORB_VISION_MODEL`;
       }
-      const child = this.spawnFn("wsl.exe", argv, {
+      const child = this.spawnFn(WSL_EXE, argv, {
         windowsHide: true,
+        shell: false,
         stdio: ["ignore", "pipe", "pipe"],
         env,
       });
@@ -196,14 +184,9 @@ export class WslAdapter implements ExecutionAdapter {
   }
 
   private toOrmbResult(o: RawOutcome): OrmbResult {
-    if (o.exitCode !== 0) {
-      return {
-        ok: false,
-        code: "cli_error",
-        message: o.stderr.trim() || `ormb exited with code ${o.exitCode}`,
-        data: null,
-      };
-    }
+    // Parse stdout JSON regardless of exit code — the CLI emits structured
+    // JSON on stdout even for error codes (doc_exists, path_containment,
+    // note_not_found, etc.). Only fall back to exit code if no JSON (grok C1).
     const r = o.raw as Record<string, unknown> | null;
     if (
       r &&
@@ -221,10 +204,11 @@ export class WslAdapter implements ExecutionAdapter {
             : (r.data as OrmbResult["data"]),
       };
     }
+    // No parseable JSON — fall back to exit code + stderr
     return {
       ok: false,
       code: "cli_error",
-      message: `Unexpected output: ${o.stdout.trim()}`,
+      message: o.stderr.trim() || `ormb exited with code ${o.exitCode}`,
       data: null,
     };
   }

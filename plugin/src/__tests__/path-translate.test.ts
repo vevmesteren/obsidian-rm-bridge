@@ -98,14 +98,15 @@ function makeFakeSpawn(): { spawn: any; recorded: () => any } {
   return { spawn, recorded: () => recorded };
 }
 
-test("WslAdapter.spawn: uses wsl.exe with --exec, no shell", async () => {
+test("WslAdapter.spawn: uses absolute wsl.exe with --exec, shell false", async () => {
   const { spawn, recorded } = makeFakeSpawn();
   const adapter = new WslAdapter(baseConfig, null as any, spawn);
   await adapter.spawn(["doctor", "--json"]);
   const r = recorded();
-  assert.equal(r.cmd, "wsl.exe");
+  assert.ok(r.cmd.includes("System32"), "must use absolute path to wsl.exe");
+  assert.ok(r.cmd.endsWith("wsl.exe"), "must end with wsl.exe");
   assert.ok(r.args.includes("--exec"), "must pass --exec");
-  assert.equal(r.opts.shell, undefined, "shell must not be set");
+  assert.equal(r.opts.shell, false, "shell must be false");
 });
 
 test("WslAdapter.spawn: windowsHide true and UTF-8 env set", async () => {
@@ -127,7 +128,7 @@ test("WslAdapter.spawn: argv is wsl.exe [--distribution <d>] --exec python -m ob
   const adapter = new WslAdapter(baseConfig, null as any, spawn);
   await adapter.spawn(["publish", "note.md", "--json"]);
   const r = recorded();
-  assert.equal(r.cmd, "wsl.exe");
+  assert.ok(r.cmd.includes("System32"), "must use absolute path to wsl.exe");
   const args = r.args as string[];
   assert.ok(args.includes("--exec"));
   assert.ok(args.includes("-m"));
@@ -140,6 +141,17 @@ test("WslAdapter.spawn: argv is wsl.exe [--distribution <d>] --exec python -m ob
   assert.ok(!args.some((a) => /cmd\.exe/.test(a)));
 });
 
+test("WslAdapter.spawn: passes --on-exists fail through to argv (R3)", async () => {
+  const { spawn, recorded } = makeFakeSpawn();
+  const adapter = new WslAdapter(baseConfig, null as any, spawn);
+  await adapter.spawn(["publish", "note.md", "--vault", "/mnt/c/vault", "--on-exists", "fail", "--json"]);
+  const r = recorded();
+  const args = r.args as string[];
+  assert.ok(args.includes("--on-exists"), "must pass --on-exists");
+  const idx = args.indexOf("--on-exists");
+  assert.equal(args[idx + 1], "fail", "--on-exists must be 'fail'");
+});
+
 test("WslAdapter.spawn: parses JSON envelope into OrmbResult", async () => {
   const { spawn } = makeFakeSpawn();
   const adapter = new WslAdapter(baseConfig, null as any, spawn);
@@ -149,7 +161,37 @@ test("WslAdapter.spawn: parses JSON envelope into OrmbResult", async () => {
   assert.equal(res.data?.pages, 3);
 });
 
-test("WslAdapter.spawn: returns error OrmbResult on non-zero exit", async () => {
+test("WslAdapter.spawn: parses JSON envelope even on non-zero exit", async () => {
+  const spawn = () => {
+    const child: any = new EventEmitter();
+    child.stdout = new EventEmitter();
+    child.stderr = new EventEmitter();
+    child.kill = () => true;
+    queueMicrotask(() => {
+      child.stdout.emit(
+        "data",
+        Buffer.from(
+          JSON.stringify({
+            ok: false,
+            code: "doc_exists",
+            message: "Document already exists",
+            data: null,
+          }),
+        ),
+      );
+      child.stderr.emit("data", Buffer.from("boom"));
+      child.emit("close", 1);
+    });
+    return child;
+  };
+  const adapter = new WslAdapter(baseConfig, null as any, spawn);
+  const res = await adapter.spawn(["publish", "note.md", "--json"]);
+  assert.equal(res.ok, false);
+  assert.equal(res.code, "doc_exists", "must parse JSON code on non-zero exit");
+  assert.equal(res.message, "Document already exists");
+});
+
+test("WslAdapter.spawn: falls back to cli_error when no JSON on non-zero exit", async () => {
   const spawn = () => {
     const child: any = new EventEmitter();
     child.stdout = new EventEmitter();
@@ -165,6 +207,40 @@ test("WslAdapter.spawn: returns error OrmbResult on non-zero exit", async () => 
   const res = await adapter.spawn(["doctor", "--json"]);
   assert.equal(res.ok, false);
   assert.equal(res.code, "cli_error");
+});
+
+test("WslAdapter.doctor: parses JSON even on non-zero exit (unhealthy)", async () => {
+  const spawn = () => {
+    const child: any = new EventEmitter();
+    child.stdout = new EventEmitter();
+    child.stderr = new EventEmitter();
+    child.kill = () => true;
+    queueMicrotask(() => {
+      child.stdout.emit(
+        "data",
+        Buffer.from(
+          JSON.stringify({
+            ok: false,
+            version: "0.1.0",
+            schema_version: 1,
+            rmapi: { path: "", version: "", found: false },
+            chromium: "missing",
+            vault: "unknown",
+            paired: false,
+            key_present: false,
+            errors: ["rmapi not found"],
+          }),
+        ),
+      );
+      child.emit("close", 1);
+    });
+    return child;
+  };
+  const adapter = new WslAdapter(baseConfig, null as any, spawn);
+  const doc = await adapter.doctor();
+  assert.equal(doc.ok, false);
+  assert.equal(doc.rmapi.found, false);
+  assert.equal(doc.errors[0], "rmapi not found");
 });
 
 test("WslAdapter.doctor: returns DoctorResult from doctor --json", async () => {

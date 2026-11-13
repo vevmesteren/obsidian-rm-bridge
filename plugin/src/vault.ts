@@ -5,10 +5,17 @@
 import { winToWsl } from "./path-translate.ts";
 import type { PlatformConfig } from "./types.ts";
 
-/** Minimal App reference so this file is unit-testable without `obsidian`. */
+/** Minimal App reference so this file is unit-testable without `obsidian`.
+ *
+ * Obsidian's `Vault` type has no `getBasePath()`. The method lives on
+ * `FileSystemAdapter` (the desktop concrete class). We duck-type it here
+ * so this module stays testable without importing `obsidian`.
+ */
 export interface VaultApp {
   vault: {
-    getBasePath(): string;
+    adapter: {
+      getBasePath(): string;
+    };
   };
 }
 
@@ -17,7 +24,7 @@ export function translateVaultRoot(
   app: VaultApp,
   config: PlatformConfig,
 ): string {
-  const base = app.vault.getBasePath();
+  const base = app.vault.adapter.getBasePath();
   // Drive-letter path → translate. Already-Linux paths (native topologies) pass
   // through `winToWsl` which rejects non-drive formats; fall back to as-is.
   if (/^[A-Za-z]:[\\/]/.test(base)) {
