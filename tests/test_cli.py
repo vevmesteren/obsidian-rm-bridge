@@ -162,3 +162,30 @@ def test_pull_default_md_resolves_relative_vault(tmp_config, tmp_path, monkeypat
         # Must resolve to tmp_path/notes/my-page.md, not notes/notes/my-page.md
         assert called_path.name == "my-page.md"
         assert "notes/notes" not in called_md
+
+
+def test_publish_resolves_relative_path_against_vault(tmp_config, tmp_path, monkeypatch):
+    """Issue #4: `ormb publish concepts/arch.md` should resolve against vault.path,
+    not the current working directory."""
+    from pathlib import Path
+
+    from obsidian_rm_bridge import config as cfg
+
+    vault_dir = tmp_path / "veviki"
+    vault_dir.mkdir()
+    sub_dir = vault_dir / "concepts" / "architecture"
+    sub_dir.mkdir(parents=True)
+    md = sub_dir / "c4-system-landscape.md"
+    md.write_text("# C4 Landscape\n\nContent.\n")
+    cfg.set("vault.path", str(vault_dir))
+    # CWD is NOT the vault
+    other_dir = tmp_path / "obsidian-rm-bridge"
+    other_dir.mkdir()
+    monkeypatch.chdir(other_dir)
+    with patch("obsidian_rm_bridge.cli.publisher.publish_page") as m_pub:
+        assert cli.main(["publish", "concepts/architecture/c4-system-landscape.md"]) == 0
+        called_path = Path(m_pub.call_args[0][0])
+        assert called_path.is_absolute()
+        assert called_path.name == "c4-system-landscape.md"
+        assert "concepts" in str(called_path)
+        assert "architecture" in str(called_path)

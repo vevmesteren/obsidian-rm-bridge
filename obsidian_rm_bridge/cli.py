@@ -95,6 +95,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 def cmd_publish(args) -> int:
     path = expand_path(args.path)
+    # Resolve relative paths against vault.path (issue #4).
+    if not path.is_absolute():
+        vault = cfg.get("vault.path")
+        if vault:
+            path = Path(os.path.expanduser(str(vault))) / path
     rm_folder = args.rm_folder or cfg.get("remarkable.folder")
     if args.folder:
         if not path.is_dir():

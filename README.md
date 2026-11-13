@@ -46,8 +46,12 @@ ormb config set vault.path ~/Documents/Obsidian
 ### Publish to reMarkable (no API key needed)
 
 ```bash
-# Publish a single page
+# Publish a single page (relative paths resolve against vault.path)
 ormb publish my-research-notes.md
+ormb publish concepts/architecture/c4-system-landscape.md
+
+# Or use an absolute path
+ormb publish /path/to/any-note.md
 
 # Publish all .md files in a folder as one combined PDF
 ormb publish my-project/ --folder
