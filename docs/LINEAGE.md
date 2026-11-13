@@ -14,7 +14,7 @@
 | 2 | 2026-11-12 | `retrieve.py` — annotation round-trip via GLM-4.5V | ✅ PoC proven |
 | 3 | 2026-11-12 | Polish: tests, CSS, folder publish, re-upload handling | ✅ Done |
 | 4 | 2026-11-12 | Open source extraction (this repo) | ✅ Done — [PR #2](https://github.com/vevmesteren/obsidian-rm-bridge/pull/2), E2E verified on WSL |
-| 5 | 2026-11-13 | Obsidian TypeScript plugin (thin CLI wrapper) | 🔄 In progress — [ARB](docs/ARB-OBSIDIAN-PLUGIN.md) synthesized, Phase 5a-0 epic created |
+| 5 | 2026-11-13 | Obsidian TypeScript plugin (thin CLI wrapper) | 🔄 In progress — [ARB](docs/ARB-OBSIDIAN-PLUGIN.md) synthesized, 5a-0 merged, 5a next |
 
 ## Source Files
 
@@ -44,7 +44,7 @@ The original skill code lives at:
 
 | Sub-phase | Scope | Status |
 |-----------|-------|--------|
-| 5a-0 | CLI contract changes (~150-250 LOC Python) | 🔄 Epic created |
+| 5a-0 | CLI contract changes (~150-250 LOC Python) | ✅ Done — [PR #8](https://github.com/vevmesteren/obsidian-rm-bridge/pull/8), 147 tests |
 | 5a | Plugin scaffold + publish command (T-WSL) | Planned |
 | 5b | Pull command + marker blocks | Planned |
 | 5c | Native adapters + README + community store submission | Planned |

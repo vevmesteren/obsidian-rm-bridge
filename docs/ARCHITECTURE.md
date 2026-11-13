@@ -1,8 +1,8 @@
 # obsidian-rm-bridge — Architecture & Delivery Plan
 
-> **Status:** Phase 4 — Open Sourcing
+> **Status:** Phase 5a-0 — CLI contract changes merged. Phase 5a (plugin scaffold) next.
 > **Author:** vevmesteren
-> **Date:** 2026-11-12
+> **Date:** 2026-11-13
 > **Repo:** [vevmesteren/obsidian-rm-bridge](https://github.com/vevmesteren/obsidian-rm-bridge)
 
 ---
@@ -287,15 +287,25 @@ ormb config set openrouter_api_key sk-or-v1-xxx
 # Publish
 ormb publish <path-to-md>              # Single page → PDF → reMarkable
 ormb publish <path-to-folder> --folder  # All .md files → combined PDF → reMarkable
+ormb publish <path-to-md> --json       # JSON envelope on stdout (plugin-facing)
+ormb publish <path-to-md> --vault <root>  # Explicit vault root (containment-checked)
+ormb publish <path-to-md> --on-exists fail|content-only  # Don't destroy annotations
 
 # Retrieve
 ormb pull <page-name>                   # Download + transcribe + append
+ormb pull <page-name> --emit json       # Return sections without writing to disk
+ormb pull <page-name> --json            # JSON envelope on stdout
 ormb pull --all                          # Pull all annotated pages from /<rm_folder>
 
 # Configuration
 ormb config set <key> <value>
+ormb config set-key                      # Set API key from stdin (not in argv)
 ormb config show
-ormb config init                         # Interactive setup wizard
+ormb config init                         # Write default config to disk
+
+# Health check
+ormb doctor                              # Human-readable health check
+ormb doctor --json                       # JSON health check (plugin-facing)
 
 # Setup
 ormb setup                               # Install Playwright browser
@@ -304,7 +314,7 @@ ormb pair                                # Pair with reMarkable (prompts for cod
 
 # Utilities
 ormb ls                                  # List files on reMarkable
-ormb rm <page-name>                       # Delete file on reMarkable
+ormb rm <page-name>                     # Delete file on reMarkable
 ```
 
 ---
