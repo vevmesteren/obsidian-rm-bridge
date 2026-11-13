@@ -45,7 +45,7 @@ The original skill code lives at:
 | Sub-phase | Scope | Status |
 |-----------|-------|--------|
 | 5a-0 | CLI contract changes (~150-250 LOC Python) | ✅ Done — [PR #8](https://github.com/vevmesteren/obsidian-rm-bridge/pull/8), 147 tests |
-| 5a | Plugin scaffold + publish command (T-WSL) | ✅ Done — [PR #10](https://github.com/vevmesteren/obsidian-rm-bridge/pull/10), 988 TS LOC, 13 tests |
+| 5a | Plugin scaffold + publish command (T-WSL) | ✅ Done — [PR #10](https://github.com/vevmesteren/obsidian-rm-bridge/pull/10), 988 TS LOC, 16 tests |
 | 5b | Pull command + marker blocks | Planned |
 | 5c | Native adapters + README + community store submission | Planned |
 | 5d/v2 | PyPI release, Electron render spike | Deferred |
