@@ -50,7 +50,7 @@ The original skill code lives at:
 | 5c | Native adapters + README + community store submission | Planned |
 | 5d/v2 | PyPI release, Electron render spike | Deferred |
 
-**Launch posture:** T-WSL is the only topology proven at v1 launch. T-MAC, T-LINUX, and T-WIN are community-tested via Reddit outreach + PRs.
+**Launch posture:** T-WSL is the primary topology for v1 launch. E2E verification on T-WSL is pending operator testing. T-MAC, T-LINUX, and T-WIN are community-tested via Reddit outreach + PRs.
 
 ## Original Plan Document
 
