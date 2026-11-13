@@ -159,3 +159,36 @@ def test_retrieve_to_json_no_file_write(tmp_path, tmp_config):
         retriever.retrieve_to_json("page", rm_folder="/Obsidian", api_key="k")
     # The source .md must be untouched
     assert md.read_text() == original
+
+
+# --- Phase 5b: retrieve_to_json rev field + section shape ---
+
+
+def test_retrieve_to_json_has_rev_field(tmp_path, tmp_config):
+    """Phase 5b: retrieve_to_json returns a `rev` field (8-char sha256 hash)."""
+    with patch("obsidian_rm_bridge.retriever.rmapi_client.refresh"), \
+         patch("obsidian_rm_bridge.retriever.rmapi_client.geta", return_value="/tmp/fake.pdf"), \
+         patch("obsidian_rm_bridge.retriever.render_pdf_to_pngs", return_value=["/tmp/p1.png"]), \
+         patch("obsidian_rm_bridge.retriever.vision_client.transcribe_pages",
+               return_value=[(1, "Note on page 1")]):
+        result = retriever.retrieve_to_json("my-page", rm_folder="/Obsidian", api_key="k")
+    assert "rev" in result
+    rev = result["rev"]
+    assert isinstance(rev, str)
+    assert len(rev) == 8
+    assert all(c in "0123456789abcdef" for c in rev)
+
+
+def test_retrieve_to_json_section_text_is_raw(tmp_path, tmp_config):
+    """Phase 5b: each section's `text` is the raw transcribed text, not a
+    header-wrapped format_annotations block."""
+    with patch("obsidian_rm_bridge.retriever.rmapi_client.refresh"), \
+         patch("obsidian_rm_bridge.retriever.rmapi_client.geta", return_value="/tmp/fake.pdf"), \
+         patch("obsidian_rm_bridge.retriever.render_pdf_to_pngs", return_value=["/tmp/p1.png"]), \
+         patch("obsidian_rm_bridge.retriever.vision_client.transcribe_pages",
+               return_value=[(1, "raw scribble"), (3, "more scribble")]):
+        result = retriever.retrieve_to_json("my-page", rm_folder="/Obsidian", api_key="k")
+    assert result["sections"][0]["text"] == "raw scribble"
+    assert result["sections"][1]["text"] == "more scribble"
+    # No repeated header inside each section.
+    assert "## Annotations from reMarkable" not in result["sections"][0]["text"]

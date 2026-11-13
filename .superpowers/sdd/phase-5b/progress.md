@@ -6,3 +6,5 @@
 - INC-003 types.ts `OrmbResult.data` union widen to include `OrmbPullData`. Existing tests access `res.data?.pages` (publish) — union member still has pages. Ruling: keep OrmbPublishData accessible; pull data is separate. Cost: TS compile error if narrowing wrong.
 
 ## Tasks
+
+Task INC-001: complete (commits 8a0e6a3..07e2eef, tests: python3 -m pytest tests/ -q → 151 passed, 6 skipped)
