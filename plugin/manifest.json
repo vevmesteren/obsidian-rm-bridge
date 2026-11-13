@@ -1,0 +1,9 @@
+{
+  "id": "obsidian-rm-bridge",
+  "name": "Obsidian reMarkable Bridge",
+  "version": "0.1.0",
+  "minAppVersion": "1.5.0",
+  "author": "vevmesteren",
+  "description": "Publish notes to reMarkable and pull back handwritten annotations",
+  "isDesktopOnly": true
+}
