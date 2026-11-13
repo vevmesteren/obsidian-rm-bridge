@@ -1,6 +1,6 @@
 # obsidian-rm-bridge — Architecture & Delivery Plan
 
-> **Status:** Phase 5a — Plugin scaffold + publish command shipped (T-WSL). Phase 5b next.
+> **Status:** Phase 5b — Pull annotations + marker blocks shipped. Phase 5c (native adapters + README + community store) next.
 > **Author:** vevmesteren
 > **Date:** 2026-11-13
 > **Repo:** [vevmesteren/obsidian-rm-bridge](https://github.com/vevmesteren/obsidian-rm-bridge)
