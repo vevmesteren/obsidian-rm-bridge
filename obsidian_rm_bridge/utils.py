@@ -6,7 +6,34 @@ import os
 import re
 from pathlib import Path
 
-__all__ = ["ensure_dir", "expand_path", "expand_user_path", "list_md_files", "strip_frontmatter"]
+__all__ = [
+    "ensure_dir",
+    "expand_path",
+    "expand_user_path",
+    "list_md_files",
+    "strip_frontmatter",
+    "strip_marker_blocks",
+]
+
+
+# Match an ormb annotations marker block: <!-- ormb:annotations ... -->.
+# The comment may carry attributes (doc="...", rev="...") and may span
+# multiple lines (DOTALL). Non-greedy so two adjacent blocks both match.
+_MARKER_BLOCK_RE = re.compile(r"<!-- ormb:annotations[^>]*?-->", re.DOTALL)
+
+
+def strip_marker_blocks(content: str) -> str:
+    """Remove ``<!-- ormb:annotations ... -->`` marker blocks from markdown.
+
+    Marker blocks are HTML comments injected by the pull command to track
+    pulled annotations. Stripping them at publish time prevents the
+    publish→pull feedback loop (Phase 5b, ARB R4): a marker that survives
+    into the published PDF would round-trip back as content.
+
+    Only the comment itself is removed; any annotation text the user kept
+    below it is preserved for rendering.
+    """
+    return _MARKER_BLOCK_RE.sub("", content)
 
 
 def strip_frontmatter(content: str) -> str:

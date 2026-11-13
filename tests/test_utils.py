@@ -10,6 +10,7 @@ from obsidian_rm_bridge.utils import (
     expand_user_path,
     list_md_files,
     strip_frontmatter,
+    strip_marker_blocks,
 )
 
 
@@ -82,3 +83,49 @@ def test_expand_path_still_expands_vars(tmp_path, monkeypatch):
     p = expand_path("$ORB_VAR/file.txt")
     assert "subdir" in str(p)
     assert "$ORB_VAR" not in str(p)
+
+
+# --- Phase 5b: strip_marker_blocks ---
+
+
+def test_strip_marker_blocks_removes_single_block():
+    content = (
+        "# Note\n\n"
+        '<!-- ormb:annotations doc="my-page" rev="abc12345" -->\n'
+        "**Page 1:**\n> scribble\n"
+    )
+    # Only the HTML-comment marker is removed; the annotation text after it
+    # is left for the publisher to render.
+    assert strip_marker_blocks(content) == (
+        "# Note\n\n\n**Page 1:**\n> scribble\n"
+    )
+
+
+def test_strip_marker_blocks_removes_multiple_blocks():
+    content = (
+        '<!-- ormb:annotations doc="a" rev="11111111" -->\n'
+        "text1\n"
+        '<!-- ormb:annotations doc="b" rev="22222222" -->\n'
+        "text2\n"
+    )
+    assert strip_marker_blocks(content) == "\ntext1\n\ntext2\n"
+
+
+def test_strip_marker_blocks_no_blocks():
+    content = "# Just a note\n\nNo markers here.\n"
+    assert strip_marker_blocks(content) == content
+
+
+def test_strip_marker_blocks_preserves_content_between():
+    content = (
+        "Before\n"
+        '<!-- ormb:annotations doc="x" rev="deadbeef" -->\n'
+        "middle\n"
+        '<!-- ormb:annotations doc="y" rev="cafef00d" -->\n'
+        "After\n"
+    )
+    result = strip_marker_blocks(content)
+    assert "Before" in result
+    assert "After" in result
+    assert "middle" in result
+    assert "ormb:annotations" not in result
