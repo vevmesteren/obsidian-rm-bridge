@@ -136,7 +136,7 @@ def test_env_overrides_in_cli(tmp_config, monkeypatch, tmp_path):
     md = tmp_path / "x.md"
     md.write_text("# x\n")
     monkeypatch.setenv("ORB_RM_FOLDER", "/EnvFolder")
-    with patch("obsidian_rm_bridge.cli.publisher.publish_page", return_value="/EnvFolder/x") as m:
+    with patch("obsidian_rm_bridge.cli.publisher.publish_page", return_value=("/EnvFolder/x", 3)) as m:
         assert cli.main(["publish", str(md)]) == 0
         # publish_page was called with the env-derived rm_folder
         assert m.call_args[0][1] == "/EnvFolder"
@@ -183,7 +183,7 @@ def test_publish_resolves_relative_path_against_vault(tmp_config, tmp_path, monk
     other_dir = tmp_path / "obsidian-rm-bridge"
     other_dir.mkdir()
     monkeypatch.chdir(other_dir)
-    with patch("obsidian_rm_bridge.cli.publisher.publish_page") as m_pub:
+    with patch("obsidian_rm_bridge.cli.publisher.publish_page", return_value=("/test", 1)) as m_pub:
         assert cli.main(["publish", "concepts/architecture/c4-system-landscape.md"]) == 0
         called_path = Path(m_pub.call_args[0][0])
         assert called_path.is_absolute()
@@ -199,7 +199,7 @@ def test_publish_json_success(tmp_config, tmp_path, capsys):
     """Item 1: publish --json emits a JSON success envelope on stdout."""
     md = tmp_path / "note.md"
     md.write_text("# Note\n")
-    with patch("obsidian_rm_bridge.cli.publisher.publish_page", return_value="/Obsidian/note"):
+    with patch("obsidian_rm_bridge.cli.publisher.publish_page", return_value=("/Obsidian/note", 3)):
         rc = cli.main(["publish", str(md), "--json"])
     assert rc == 0
     out = capsys.readouterr().out
@@ -209,6 +209,7 @@ def test_publish_json_success(tmp_config, tmp_path, capsys):
     assert env["code"] == "published"
     assert "data" in env
     assert env["data"]["name"] == "note"
+    assert env["data"]["pages"] == 3
 
 
 def test_publish_json_error_note_not_found(tmp_config, capsys):
@@ -242,7 +243,7 @@ def test_publish_doc_exists_without_json(tmp_config, tmp_path, capsys):
     md.write_text("# Note\n")
     listing = "[f]\tnote\n"
     with patch("obsidian_rm_bridge.cli.rmapi_client.ls", return_value=listing), \
-         patch("obsidian_rm_bridge.cli.publisher.publish_page") as m_pub:
+         patch("obsidian_rm_bridge.cli.publisher.publish_page", return_value=("/test", 1)) as m_pub:
         rc = cli.main(["publish", str(md)])
     assert rc == 1
     err = capsys.readouterr().err
@@ -254,7 +255,7 @@ def test_publish_on_exists_content_only(tmp_config, tmp_path):
     """Item 4: --on-exists content-only passes content_only=True to publisher."""
     md = tmp_path / "note.md"
     md.write_text("# Note\n")
-    with patch("obsidian_rm_bridge.cli.publisher.publish_page", return_value="/Obsidian/note") as m:
+    with patch("obsidian_rm_bridge.cli.publisher.publish_page", return_value=("/Obsidian/note", 3)) as m:
         cli.main(["publish", str(md), "--on-exists", "content-only"])
         assert m.call_args.kwargs["content_only"] is True
 
@@ -354,7 +355,7 @@ def test_publish_vault_flag_precedence(tmp_config, tmp_path, monkeypatch):
     md.write_text("# Note\n")
     # CWD is NOT the vault
     monkeypatch.chdir(tmp_path)
-    with patch("obsidian_rm_bridge.cli.publisher.publish_page") as m:
+    with patch("obsidian_rm_bridge.cli.publisher.publish_page", return_value=("/test", 1)) as m:
         cli.main(["publish", "note.md", "--vault", str(vault_dir)])
         called_path = Path(m.call_args[0][0])
         assert called_path.is_absolute()
@@ -388,6 +389,16 @@ def test_config_set_key_stdin(tmp_config, monkeypatch):
     assert cli.main(["config", "set-key"]) == 0
     from obsidian_rm_bridge import config as cfg
     assert cfg.get("vision.openrouter_api_key") == test_key
+
+
+def test_config_set_key_empty_stdin_rejected(tmp_config, monkeypatch, capsys):
+    """Cold review #10: config set-key with empty stdin returns error, does not erase key."""
+    import io
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.setattr("sys.stdin", io.StringIO("\n"))
+    assert cli.main(["config", "set-key"]) == 1
+    err = capsys.readouterr().err
+    assert "no key" in err.lower()
 
 
 def test_config_set_openrouter_deprecation(tmp_config, capsys):
@@ -460,7 +471,7 @@ def test_publish_dollar_sign_filename(tmp_config, tmp_path, monkeypatch):
     md = vault_dir / "Budget $HOME.md"
     md.write_text("# Budget\n")
     monkeypatch.setenv("HOME", "/tmp/should_not_expand")
-    with patch("obsidian_rm_bridge.cli.publisher.publish_page") as m:
+    with patch("obsidian_rm_bridge.cli.publisher.publish_page", return_value=("/test", 1)) as m:
         cli.main(["publish", "Budget $HOME.md", "--vault", str(vault_dir)])
         called_path = Path(m.call_args[0][0])
         assert "$HOME" in called_path.name  # $HOME NOT expanded

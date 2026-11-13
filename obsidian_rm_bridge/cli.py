@@ -216,13 +216,13 @@ def cmd_publish(args) -> int:
             if not path.is_dir():
                 _eprint(f"Error: --folder requires a directory, not a file: {path}")
                 return 2
-            dest = publisher.publish_folder(path, rm_folder,
+            dest, pages = publisher.publish_folder(path, rm_folder,
                                             dry_run=args.dry_run, content_only=content_only)
         elif path.is_dir():
-            dest = publisher.publish_folder(path, rm_folder,
+            dest, pages = publisher.publish_folder(path, rm_folder,
                                             dry_run=args.dry_run, content_only=content_only)
         elif path.is_file():
-            dest = publisher.publish_page(path, rm_folder,
+            dest, pages = publisher.publish_page(path, rm_folder,
                                           dry_run=args.dry_run, content_only=content_only)
         else:
             if args.json:
@@ -239,7 +239,7 @@ def cmd_publish(args) -> int:
 
     if args.json:
         _emit_json(True, "published", f"Published '{name}' to {dest}",
-                   {"name": name, "folder": rm_folder, "dest": dest})
+                   {"name": name, "folder": rm_folder, "dest": dest, "pages": pages})
     return 0
 
 
@@ -366,6 +366,9 @@ def cmd_config(args) -> int:
         key = sys.stdin.readline().strip()
         if not key and sys.stdin.isatty():
             key = getpass.getpass("OpenRouter API key: ")
+        if not key:
+            _eprint("Error: no key provided on stdin.")
+            return 1
         cfg.set("vision.openrouter_api_key", key)
         _eprint("API key set. Use 'ormb config show' to verify.")
         return 0

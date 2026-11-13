@@ -154,8 +154,6 @@ def retrieve_to_json(
     ``sections`` (list of ``{"page": N, "text": "..."}``),
     ``doc_id``, ``total_pages``, ``annotated_pages``.
     """
-    from .pdf_renderer import page_count
-
     if rm_folder is None:
         rm_folder = get("remarkable.folder")
     if model is None:

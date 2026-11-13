@@ -55,7 +55,7 @@ def test_publish_page_uploads_via_rmapi(tmp_path):
     md.write_text("# Test\n\nContent.\n")
     with patch("obsidian_rm_bridge.publisher.rmapi_client.put", return_value="/Obsidian/Test") as m, \
          patch("obsidian_rm_bridge.publisher.html_to_pdf") as mock_pdf:
-        dest = publisher.publish_page(md, rm_folder="/Obsidian")
+        dest, pages = publisher.publish_page(md, rm_folder="/Obsidian")
         assert dest == "/Obsidian/Test"
         m.assert_called_once()
         # dest_name defaults to the .md stem
@@ -68,7 +68,7 @@ def test_publish_page_dry_run_skips_upload(tmp_path):
     md.write_text("# Test\n")
     with patch("obsidian_rm_bridge.publisher.rmapi_client.put") as m_put, \
          patch("obsidian_rm_bridge.publisher.html_to_pdf"):
-        dest = publisher.publish_page(md, rm_folder="/Obsidian", dry_run=True)
+        dest, pages = publisher.publish_page(md, rm_folder="/Obsidian", dry_run=True)
     assert "dry-run" in dest
     m_put.assert_not_called()
 
@@ -78,7 +78,7 @@ def test_publish_folder_uploads_via_rmapi(tmp_path):
         (tmp_path / n).write_text(f"# {n}\n")
     with patch("obsidian_rm_bridge.publisher.rmapi_client.put", return_value="/Obsidian/folder") as m, \
          patch("obsidian_rm_bridge.publisher.html_to_pdf"):
-        dest = publisher.publish_folder(tmp_path, rm_folder="/Obsidian")
+        dest, pages = publisher.publish_folder(tmp_path, rm_folder="/Obsidian")
         assert dest == "/Obsidian/folder"
         m.assert_called_once()
 

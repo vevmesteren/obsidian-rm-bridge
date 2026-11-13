@@ -238,7 +238,7 @@ def publish_page(
     dry_run: bool = False,
     vault_root: str | os.PathLike | None = None,
     content_only: bool = False,
-) -> str:
+) -> tuple[str, int]:
     """Publish a single markdown page to reMarkable.
 
     Renders markdown → PDF (Playwright), uploads via ``rmapi put``. Returns the
@@ -256,13 +256,18 @@ def publish_page(
     try:
         print(f"Rendering {md_path} → PDF...", file=sys.stderr)
         md_to_pdf(md_path, pdf_path, title=name, vault_root=vault_root)
+        from .pdf_renderer import page_count as _page_count
+        try:
+            _pages = _page_count(pdf_path)
+        except Exception:
+            _pages = 0
         if dry_run:
             print(f"[dry-run] skipping upload; PDF at {pdf_path}", file=sys.stderr)
-            return f"[dry-run] {rm_folder}/{name}"
+            return f"[dry-run] {rm_folder}/{name}", _pages
         print(f"Uploading to {rm_folder}...", file=sys.stderr)
         dest = rmapi_client.put(pdf_path, rm_folder, dest_name=name, content_only=content_only)
         print(f"Published {name} to {dest} on your reMarkable", file=sys.stderr)
-        return dest
+        return dest, _pages
     finally:
         # Only clean up the temp PDF on non-dry-run paths (Copilot #8).
         # Dry-run preserves the PDF for user inspection.
@@ -277,7 +282,7 @@ def publish_folder(
     dry_run: bool = False,
     vault_root: str | os.PathLike | None = None,
     content_only: bool = False,
-) -> str:
+) -> tuple[str, int]:
     """Publish all ``.md`` files in a folder as a combined PDF to reMarkable."""
     if rm_folder is None:
         rm_folder = get("remarkable.folder")
@@ -289,13 +294,18 @@ def publish_folder(
     try:
         print(f"Rendering folder {folder_path} → combined PDF...", file=sys.stderr)
         folder_to_pdf(folder_path, pdf_path, vault_root=vault_root)
+        from .pdf_renderer import page_count as _page_count
+        try:
+            _pages = _page_count(pdf_path)
+        except Exception:
+            _pages = 0
         if dry_run:
             print(f"[dry-run] skipping upload; PDF at {pdf_path}", file=sys.stderr)
-            return f"[dry-run] {rm_folder}/{folder_name}"
+            return f"[dry-run] {rm_folder}/{folder_name}", _pages
         print(f"Uploading to {rm_folder}...", file=sys.stderr)
         dest = rmapi_client.put(pdf_path, rm_folder, dest_name=folder_name, content_only=content_only)
         print(f"Published {folder_name} to {dest} on your reMarkable", file=sys.stderr)
-        return dest
+        return dest, _pages
     finally:
         # Only clean up the temp PDF on non-dry-run paths (Copilot #8).
         if not dry_run and os.path.exists(pdf_path):
