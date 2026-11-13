@@ -32,13 +32,23 @@ _MERMAID_FENCE = r'```mermaid\r?\n(.*?)\r?\n```'
 _HTML_TEMPLATE = """<!doctype html>
 <html><head><meta charset="utf-8">
 <script src="{url}"></script>
-<style>body{{margin:0;background:#fff;}} .mermaid{{background:#fff;}}</style>
+<style>body{margin:0;background:#fff;} .mermaid{background:#fff;}</style>
 </head><body>
 <div class="mermaid">{diagram}</div>
 <script>
-  mermaid.initialize({{ startOnLoad: true, securityLevel: 'strict', theme: 'default', htmlLabels: false }});
+  mermaid.initialize({ startOnLoad: true, securityLevel: 'strict', theme: 'default', htmlLabels: false });
 </script>
 </body></html>"""
+
+
+def _html_escape_diagram(diagram: str) -> str:
+    """Escape HTML metacharacters in mermaid diagram text (grok F9).
+
+    Prevents template/HTML injection — invariant 1: no vault-derived byte
+    is parsed as a template. Mermaid.js handles HTML entities in its input.
+    """
+    import html as _html
+    return _html.escape(diagram, quote=False)
 
 
 def _make_route_handler(vault_root: Path | None = None):
@@ -93,7 +103,7 @@ def render_mermaid_to_png(
     """
     from playwright.sync_api import sync_playwright
 
-    html = _HTML_TEMPLATE.format(url=MERMAID_JS_URL, diagram=diagram)
+    html = _HTML_TEMPLATE.replace("{url}", MERMAID_JS_URL).replace("{diagram}", _html_escape_diagram(diagram))
     out = Path(output_path)
     out.parent.mkdir(parents=True, exist_ok=True)
     vr = Path(str(vault_root)).resolve() if vault_root is not None else None

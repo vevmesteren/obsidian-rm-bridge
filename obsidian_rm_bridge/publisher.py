@@ -106,6 +106,9 @@ def _resolve_image_paths(content: str, base_dir: Path, vault_root: Path | None =
         src = _re_split_title(src)
         src = unquote(src)  # decode %20 etc. before resolving (R2-2)
         abs_path = (base_dir / src).resolve()
+        # Containment check: reject images that resolve outside vault_root (grok F1).
+        if vault_root is not None and not abs_path.is_relative_to(Path(str(vault_root)).resolve()):
+            return f'![{alt}](about:blank)'
         return f'![{alt}]({abs_path.as_uri()})'
 
     def _replace_wiki(match: re.Match) -> str:
@@ -146,7 +149,7 @@ def md_to_html(md_path: str | os.PathLike, vault_root: str | os.PathLike | None 
     md_path = Path(md_path)
     content = md_path.read_text(encoding="utf-8")
     content = strip_frontmatter(content)
-    content = render_mermaid_blocks(content)
+    content = render_mermaid_blocks(content, vault_root=str(vault_root) if vault_root is not None else None)
     # Resolve relative image paths to absolute file URIs so Playwright can
     # load them from about:blank (Copilot #6). Expand ~ in vault_root
     # before resolving (adversarial C1 — default vault.path is "~/Documents/Obsidian").

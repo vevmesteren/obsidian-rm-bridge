@@ -269,7 +269,7 @@ def test_pull_json_success(tmp_config, capsys):
     import json
     env = json.loads(capsys.readouterr().out)
     assert env["ok"] is True
-    assert env["code"] == "pulled"
+    assert env["code"] == "transcribed"
 
 
 # --- Item 2: doctor --json ---
@@ -521,3 +521,120 @@ def test_pull_all_containment_violation(tmp_config, tmp_path, capsys):
     assert env["ok"] is False
     assert env["code"] == "path_containment"
     m_ret.assert_not_called()
+
+
+# --- Grok F6: error code tests (not_paired, rmapi_missing, chromium_missing,
+#     key_missing, rate_limited, vision_failed) ---
+
+
+def test_error_code_not_paired(tmp_config, tmp_path, capsys):
+    """Grok F6: not_paired error code fires through --json envelope."""
+    from obsidian_rm_bridge.rmapi_client import RmapiError
+    vault_dir = tmp_path / "vault"
+    vault_dir.mkdir()
+    md = vault_dir / "page.md"
+    md.write_text("# Page\n")
+    with patch("obsidian_rm_bridge.cli.retriever.retrieve",
+               side_effect=RmapiError("not paired: token missing")):
+        rc = cli.main(["pull", "page", "--md", str(md), "--vault", str(vault_dir), "--json"])
+    assert rc == 1
+    import json
+    env = json.loads(capsys.readouterr().out)
+    assert env["ok"] is False
+    assert env["code"] == "not_paired"
+
+
+def test_error_code_rmapi_missing(tmp_config, tmp_path, capsys):
+    """Grok F6: rmapi_missing error code fires through --json envelope."""
+    from obsidian_rm_bridge.rmapi_client import RmapiError
+    vault_dir = tmp_path / "vault"
+    vault_dir.mkdir()
+    md = vault_dir / "page.md"
+    md.write_text("# Page\n")
+    with patch("obsidian_rm_bridge.cli.retriever.retrieve",
+               side_effect=RmapiError("rmapi binary not found")):
+        rc = cli.main(["pull", "page", "--md", str(md), "--vault", str(vault_dir), "--json"])
+    assert rc == 1
+    import json
+    env = json.loads(capsys.readouterr().out)
+    assert env["ok"] is False
+    assert env["code"] == "rmapi_missing"
+
+
+def test_error_code_key_missing(tmp_config, tmp_path, monkeypatch, capsys):
+    """Grok F3/F6: key_missing fires for 'OPENROUTER_API_KEY is not set'."""
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    vault_dir = tmp_path / "vault"
+    vault_dir.mkdir()
+    md = vault_dir / "page.md"
+    md.write_text("# Page\n")
+    with patch("obsidian_rm_bridge.cli.retriever.retrieve",
+               side_effect=RuntimeError("OPENROUTER_API_KEY is not set")):
+        rc = cli.main(["pull", "page", "--md", str(md), "--vault", str(vault_dir), "--json"])
+    assert rc == 1
+    import json
+    env = json.loads(capsys.readouterr().out)
+    assert env["ok"] is False
+    assert env["code"] == "key_missing"
+
+
+def test_error_code_rate_limited(tmp_config, tmp_path, capsys):
+    """Grok F5/F6: rate_limited fires for HTTP 429."""
+    vault_dir = tmp_path / "vault"
+    vault_dir.mkdir()
+    md = vault_dir / "page.md"
+    md.write_text("# Page\n")
+    with patch("obsidian_rm_bridge.cli.retriever.retrieve",
+               side_effect=RuntimeError("HTTP 429: rate limit exceeded")):
+        rc = cli.main(["pull", "page", "--md", str(md), "--vault", str(vault_dir), "--json"])
+    assert rc == 1
+    import json
+    env = json.loads(capsys.readouterr().out)
+    assert env["ok"] is False
+    assert env["code"] == "rate_limited"
+
+
+def test_error_code_vision_failed(tmp_config, tmp_path, capsys):
+    """Grok F6: vision_failed fires when all pages fail transcription."""
+    vault_dir = tmp_path / "vault"
+    vault_dir.mkdir()
+    md = vault_dir / "page.md"
+    md.write_text("# Page\n")
+    with patch("obsidian_rm_bridge.cli.retriever.retrieve",
+               side_effect=RuntimeError("All pages failed transcription")):
+        rc = cli.main(["pull", "page", "--md", str(md), "--vault", str(vault_dir), "--json"])
+    assert rc == 1
+    import json
+    env = json.loads(capsys.readouterr().out)
+    assert env["ok"] is False
+    assert env["code"] == "vision_failed"
+
+
+def test_error_code_chromium_missing(tmp_config, tmp_path, capsys):
+    """Grok F4/F6: chromium_missing fires for Playwright 'executable' error
+    (Playwright Error is not a RuntimeError)."""
+    vault_dir = tmp_path / "vault"
+    vault_dir.mkdir()
+    md = vault_dir / "page.md"
+    md.write_text("# Page\n")
+    with patch("obsidian_rm_bridge.cli.publisher.publish_page",
+               side_effect=Exception("Executable doesn't exist at /chromium")):
+        rc = cli.main(["publish", str(md), "--vault", str(vault_dir), "--json"])
+    assert rc == 1
+    import json
+    env = json.loads(capsys.readouterr().out)
+    assert env["ok"] is False
+    assert env["code"] == "chromium_missing"
+
+
+# --- Grok F7: pull --all --emit json is blocked ---
+
+
+def test_pull_all_emit_json_blocked(tmp_config, capsys):
+    """Grok F7: pull --all --emit json returns error, does not write to disk."""
+    rc = cli.main(["pull", "--all", "--emit", "json", "--json"])
+    assert rc == 1
+    import json
+    env = json.loads(capsys.readouterr().out)
+    assert env["ok"] is False
+    assert env["code"] == "cli_error"

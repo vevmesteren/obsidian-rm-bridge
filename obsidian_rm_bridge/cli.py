@@ -63,20 +63,22 @@ def _classify_error(e: Exception) -> str:
         if "not paired" in msg or "token" in msg or "unauthorized" in msg:
             return "not_paired"
         return "cli_error"
-    # key_missing: vision client raises when OPENROUTER_API_KEY is unset.
-    if isinstance(e, RuntimeError) and "api key" in msg and "not set" in msg:
+    # rate_limited: check BEFORE vision_failed (grok F5) — 429s can surface
+    # inside a "failed transcription" RuntimeError, so check rate first.
+    if "429" in msg or "rate limit" in msg or "rate-limited" in msg:
+        return "rate_limited"
+    # key_missing: vision client raises RuntimeError("OPENROUTER_API_KEY is not set").
+    # Match on "api_key" (underscore) or "openrouter" + "not set" (grok F3).
+    if isinstance(e, RuntimeError) and ("api_key" in msg or "api key" in msg) and "not set" in msg:
+        return "key_missing"
+    if isinstance(e, RuntimeError) and "openrouter" in msg and "not set" in msg:
         return "key_missing"
     # vision_failed: transcribe_pages raises when every page failed.
     if isinstance(e, RuntimeError) and "failed transcription" in msg:
         return "vision_failed"
-    # rate_limited: HTTP 429 / rate limit from the vision API.
-    if "429" in msg or "rate limit" in msg or "rate-limited" in msg:
-        return "rate_limited"
-    # chromium_missing: Playwright browser not installed / executable not found.
-    if isinstance(e, RuntimeError) and (
-        "executable" in msg or "chromium" in msg or "browser" in msg
-        or "playwright" in msg
-    ):
+    # chromium_missing: Playwright Error is not RuntimeError (grok F4).
+    # Check message content regardless of exception type.
+    if "executable" in msg or "chromium" in msg or "browser" in msg or "playwright" in msg:
         return "chromium_missing"
     return "cli_error"
 
@@ -207,8 +209,8 @@ def cmd_publish(args) -> int:
                 else:
                     _eprint(f"Error: {msg}")
                 return 1
-        except Exception:  # noqa: BLE001, S110 — don't block publish on ls failure
-            pass
+        except Exception as e:  # noqa: BLE001 — log but don't block publish
+            _eprint(f"Warning: could not check for existing document: {e}")
 
     try:
         if args.folder:
@@ -216,13 +218,16 @@ def cmd_publish(args) -> int:
                 _eprint(f"Error: --folder requires a directory, not a file: {path}")
                 return 2
             dest, pages = publisher.publish_folder(path, rm_folder,
-                                            dry_run=args.dry_run, content_only=content_only)
+                                            dry_run=args.dry_run, content_only=content_only,
+                                            vault_root=str(vault_root) if vault_root else None)
         elif path.is_dir():
             dest, pages = publisher.publish_folder(path, rm_folder,
-                                            dry_run=args.dry_run, content_only=content_only)
+                                            dry_run=args.dry_run, content_only=content_only,
+                                            vault_root=str(vault_root) if vault_root else None)
         elif path.is_file():
             dest, pages = publisher.publish_page(path, rm_folder,
-                                          dry_run=args.dry_run, content_only=content_only)
+                                          dry_run=args.dry_run, content_only=content_only,
+                                          vault_root=str(vault_root) if vault_root else None)
         else:
             if args.json:
                 _emit_json(False, "note_not_found", f"File not found: {path}", None)
@@ -249,6 +254,13 @@ def cmd_pull(args) -> int:
         vault_root = expand_user_path(args.vault).resolve()
 
     if args.pull_all:
+        if args.emit == "json":
+            if args.json:
+                _emit_json(False, "cli_error",
+                           "pull --all --emit json is not supported (use pull <page> --emit json)", None)
+            else:
+                _eprint("Error: pull --all --emit json is not supported. Use 'pull <page> --emit json'.")
+            return 1
         rm_folder = args.rm_folder or cfg.get("remarkable.folder")
         vault = args.vault or cfg.get("vault.path")
         listing = rmapi_client.ls(rm_folder)
@@ -353,8 +365,8 @@ def cmd_pull(args) -> int:
         return 1
 
     if args.json:
-        _emit_json(True, "pulled",
-                   f"Pulled annotations from {args.page_name} into {md_path}",
+        _emit_json(True, "transcribed",
+                   f"Transcribed annotations from {args.page_name} into {md_path}",
                    {"page_name": args.page_name, "md_path": md_path})
     return 0
 

@@ -192,13 +192,15 @@ def set(key: str, value: str, path: str | os.PathLike | None = None) -> None:
     # at creation time to avoid a TOCTOU race (adversarial I1).
     # ARB item 9: O_NOFOLLOW prevents symlink attacks; fchmod ensures
     # correct mode even if the file existed; S_ISREG/st_uid guards
-    # against replaced special files.
-    fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+    # against replaced special files. Open without O_TRUNC first (grok F10):
+    # check fstat before truncating to avoid zeroing a file that fails the uid/regular check.
+    fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW, 0o600)
     os.fchmod(fd, 0o600)
     _st = os.fstat(fd)
     if not stat.S_ISREG(_st.st_mode) or _st.st_uid != os.getuid():
         os.close(fd)
         raise PermissionError(f"config file {p} is not a regular file owned by current user")
+    os.ftruncate(fd, 0)  # truncate after safety checks (grok F10)
     with os.fdopen(fd, "wb") as f:
         tomli_w.dump(data, f)
 

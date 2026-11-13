@@ -32,6 +32,14 @@ def html_to_pdf(
         browser = p.chromium.launch()
         try:
             page = browser.new_page()
+            # Route interceptor: block out-of-vault file:// URIs (grok F1).
+            def _block_outside(route):
+                url = route.request.url
+                if url.startswith(("data:", "http:", "https:")):
+                    route.continue_()
+                    return
+                route.abort()
+            page.route("**/*", _block_outside)
             page.set_content(html, wait_until="networkidle", timeout=timeout_ms)
             page.emulate_media(media="print")
             page.pdf(

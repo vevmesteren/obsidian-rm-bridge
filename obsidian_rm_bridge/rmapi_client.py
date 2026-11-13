@@ -199,4 +199,5 @@ def pair() -> int:
         f"code. rmapi will prompt for it below.",
         file=sys.stderr,
     )
-    return subprocess.run([RMAPI_BIN], check=False).returncode
+    resolved = resolve_rmapi() or RMAPI_BIN
+    return subprocess.run([resolved], check=False).returncode
