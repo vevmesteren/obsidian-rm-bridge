@@ -29,6 +29,7 @@ pip install -e .
 playwright install chromium      # needed for PDF rendering
 
 ormb setup --rmapi               # downloads rmapi binary for your platform
+ormb setup                       # installs Chromium + system deps (Linux needs sudo)
 
 # Pair with reMarkable (one-time)
 ormb pair
@@ -120,6 +121,8 @@ sudo apt install python3 python3-pip python3-venv python3.10-venv
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
 ormb setup --rmapi
+ormb setup          # installs Chromium + system libs (libgbm, libnss, etc.)
+                    # runs `sudo playwright install-deps` automatically
 ```
 
 ## CLI Reference

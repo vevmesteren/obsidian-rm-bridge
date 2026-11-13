@@ -229,6 +229,18 @@ def cmd_setup(args) -> int:
         _eprint("Ensure that directory is on your PATH.")
         return 0
     _eprint("Installing Playwright Chromium browser...")
+    # Install system dependencies first (Linux only — requires sudo).
+    # Without these, Chromium crashes with missing shared libraries (issue #4).
+    if sys.platform.startswith("linux"):
+        _eprint("Installing system dependencies for Chromium (requires sudo)...")
+        deps_rc = subprocess.call(
+            ["sudo", sys.executable, "-m", "playwright", "install-deps", "chromium"],
+        )
+        if deps_rc != 0:
+            _eprint(
+                "Warning: could not install system dependencies. "
+                f"Run: sudo {sys.executable} -m playwright install-deps chromium"
+            )
     return subprocess.call([sys.executable, "-m", "playwright", "install", "chromium"])
 
 
