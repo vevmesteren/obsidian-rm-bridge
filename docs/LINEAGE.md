@@ -11,8 +11,8 @@
 | 1 | 2026-11-12 | `publish.py` — markdown → PDF → reMarkable upload | ✅ PoC proven |
 | 2 | 2026-11-12 | `retrieve.py` — annotation round-trip via GLM-4.5V | ✅ PoC proven |
 | 3 | 2026-11-12 | Polish: tests, CSS, folder publish, re-upload handling | ✅ Done |
-| **4** | **2026-11-12** | **Open source extraction** (this repo) | **In progress** |
-| 5 | TBD | Obsidian TypeScript plugin (thin CLI wrapper) | Planned |
+| 4 | 2026-11-12 | Open source extraction (this repo) | ✅ Done — [PR #2](https://github.com/vevmesteren/obsidian-rm-bridge/pull/2), E2E verified on WSL |
+| 5 | 2026-11-13 | Obsidian TypeScript plugin (thin CLI wrapper) | 🔄 In progress — [ARB](docs/ARB-OBSIDIAN-PLUGIN.md) synthesized, Phase 5a-0 epic created |
 
 ## Source Files
 
@@ -33,6 +33,22 @@ The original skill code lives at:
 3. **Script files → pip package** — `pip install obsidian-rm-bridge`, CLI `ormb`
 4. **Hardcoded model → configurable** — default GLM-4.5V, any OpenRouter model
 5. **Single-purpose → cross-platform** — Mac, Windows, Linux install paths documented
+
+## Phase 5 — Obsidian Plugin (ARB-Driven)
+
+**ARB:** [`docs/ARB-OBSIDIAN-PLUGIN.md`](docs/ARB-OBSIDIAN-PLUGIN.md) — Synthesized target architecture (5-stage ARB pipeline,completed 2026-11-13)
+
+**Delivery plan (from ARB):**
+
+| Sub-phase | Scope | Status |
+|-----------|-------|--------|
+| 5a-0 | CLI contract changes (~150-250 LOC Python) | 🔄 Epic created |
+| 5a | Plugin scaffold + publish command (T-WSL) | Planned |
+| 5b | Pull command + marker blocks | Planned |
+| 5c | Native adapters + README + community store submission | Planned |
+| 5d/v2 | PyPI release, Electron render spike | Deferred |
+
+**Launch posture:** T-WSL is the only topology proven at v1 launch. T-MAC, T-LINUX, and T-WIN are community-tested via Reddit outreach + PRs.
 
 ## Original Plan Document
 
