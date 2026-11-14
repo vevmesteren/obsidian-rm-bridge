@@ -18,16 +18,74 @@ import sys
 import tempfile
 from pathlib import Path
 
+from . import config as cfg_mod
 from . import rmapi_client, vision_client
 from .config import get
+from .pdf_renderer import page_count
 
 __all__ = [
     "append_annotations",
     "format_annotations",
     "render_pdf_to_pngs",
     "retrieve",
+    "retrieve_info",
     "retrieve_to_json",
 ]
+
+
+def _pull_cache_path() -> Path:
+    """Path to the pull cache JSON inside the config dir (Phase 5c AC-1)."""
+    return Path(cfg_mod.CONFIG_DIR) / "pull_cache.json"
+
+
+class PullCache:
+    """On-disk cache of vision transcription results keyed by PDF sha256.
+
+    Phase 5c AC-1: re-pulling an unchanged document (same PDF content hash)
+    returns the cached transcription without calling the vision pipeline,
+    so it doesn't pay OpenRouter again. If the annotations change, the PDF
+    hash changes and the cache misses.
+
+    The cache lives at ``{CONFIG_DIR}/pull_cache.json``. A missing or corrupt
+    cache file is treated as an empty cache (never crashes).
+    """
+
+    def __init__(self, path: str | os.PathLike | None = None):
+        self.path = Path(path) if path is not None else _pull_cache_path()
+
+    def _load(self) -> dict:
+        """Return the cache dict, or ``{}`` if missing/corrupt."""
+        if not self.path.is_file():
+            return {}
+        try:
+            with self.path.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+            return data if isinstance(data, dict) else {}
+        except (OSError, ValueError):
+            # Corrupt JSON or unreadable — treat as empty (AC-1 TC-3).
+            return {}
+
+    def get(self, pdf_hash: str) -> dict | None:
+        """Return the cached entry for ``pdf_hash``, or ``None`` on miss."""
+        return self._load().get(pdf_hash)
+
+    def put(self, pdf_hash: str, entry: dict) -> None:
+        """Store ``entry`` under ``pdf_hash``. Failures are logged to stderr,
+        never raised — a cache write failure shouldn't break the pull."""
+        data = self._load()
+        data[pdf_hash] = entry
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            with self.path.open("w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+        except OSError as e:  # best-effort cache
+            print(f"Warning: could not write pull cache: {e}", file=sys.stderr)
+        else:
+            # Restrict permissions — cache contains transcribed handwriting.
+            try:
+                os.chmod(self.path, 0o600)
+            except OSError:
+                pass
 
 
 def render_pdf_to_pngs(pdf_path: str | os.PathLike, output_dir: str | os.PathLike, *, dpi: int = 300) -> list:
@@ -53,27 +111,27 @@ def render_pdf_to_pngs(pdf_path: str | os.PathLike, output_dir: str | os.PathLik
 
 
 def format_annotations(annotations: list, *, date_str: str | None = None) -> str:
-    """Format annotations as a markdown section (DC-7).
+    """Format annotations as a markdown section (Phase 5c format).
 
-    Produces::
+    Produces a single date-titled section with one bullet per annotation::
 
-        ## Annotations from reMarkable — YYYY-MM-DD
+        ## [YYYY-MM-DD] Annotations
 
-        **Page N:**
-        > transcribed text
+        - handwritten annotation text
+        - another annotation
     """
     if date_str is None:
         date_str = datetime.date.today().isoformat()
-    header = f"## Annotations from reMarkable — {date_str}\n"
+    header = f"## [{date_str}] Annotations\n"
     if not annotations:
-        return header + "\n> No annotations found.\n"
-    sections = [header]
-    for page_num, text in annotations:
-        sections.append(f"\n**Page {page_num}:**\n")
-        # Prefix every line with > so multiline annotations stay in the blockquote (Copilot R3-5)
-        quoted = "\n".join(f"> {line}" if line else ">" for line in text.splitlines())
-        sections.append(f"{quoted}\n")
-    return "\n".join(sections) + "\n"
+        return header + "\nNo annotations found.\n"
+    lines = [header]
+    for _page_num, text in annotations:
+        # Each annotation becomes one bullet line; multiline text stays as one
+        # bullet (whitespace collapsed) so the section reads as a flat list.
+        flat = " ".join(text.split())
+        lines.append(f"- {flat}")
+    return "\n".join(lines) + "\n"
 
 
 def append_annotations(md_path: str | os.PathLike, annotations_section: str) -> None:
@@ -172,6 +230,19 @@ def retrieve_to_json(
         print(f"Downloading annotated PDF from {rm_path}...", file=sys.stderr)
         pdf_path = rmapi_client.geta(rm_path, tmpdir)
 
+        # AC-1: cache by PDF content hash + vision model so re-pulling an
+        # unchanged document skips the (paid) vision pipeline. The hash is
+        # over the downloaded PDF bytes — if the annotations change, the PDF
+        # hash changes too. The model is included so changing vision.model
+        # invalidates the cache.
+        pdf_hash = hashlib.sha256(Path(pdf_path).read_bytes()).hexdigest()
+        cache_key = f"{pdf_hash}:{model or 'default'}"
+        cache = PullCache()
+        cached = cache.get(cache_key)
+        if cached is not None:
+            print("Cache hit — skipping vision pipeline", file=sys.stderr)
+            return cached
+
         print("Rendering PDF pages to PNG...", file=sys.stderr)
         png_paths = render_pdf_to_pngs(pdf_path, tmpdir)
         total_pages = len(png_paths)
@@ -190,10 +261,46 @@ def retrieve_to_json(
     rev = hashlib.sha256(
         json.dumps(sections, sort_keys=True, ensure_ascii=False).encode()
     ).hexdigest()[:8]
-    return {
+    result = {
         "sections": sections,
         "doc_id": page_name,
         "rev": rev,
         "total_pages": total_pages,
         "annotated_pages": len(sections),
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
+    # AC-1: store the result so the next pull of the same PDF + model hits.
+    cache.put(cache_key, result)
+    return result
+
+
+def retrieve_info(
+    page_name: str,
+    *,
+    rm_folder: str | None = None,
+) -> dict:
+    """Download + render a PDF and return page counts WITHOUT calling vision.
+
+    Phase 5c AC-5: the plugin's consent modal needs to show the page count
+    before consenting to vision cost. ``annotated_pages`` equals
+    ``total_pages`` here (all pages are sent to vision; the real annotated
+    count is only known after transcription).
+
+    Returns ``{"total_pages": N, "annotated_pages": N}``.
+    """
+    if rm_folder is None:
+        rm_folder = get("remarkable.folder")
+
+    rm_path = f"{rm_folder.rstrip('/')}/{page_name}"
+    with tempfile.TemporaryDirectory() as tmpdir:
+        print("Refreshing reMarkable cloud index...", file=sys.stderr)
+        rmapi_client.refresh()
+
+        print(f"Downloading annotated PDF from {rm_path}...", file=sys.stderr)
+        pdf_path = rmapi_client.geta(rm_path, tmpdir)
+
+        # Use pymupdf page_count (metadata read) instead of rendering PNGs.
+        total_pages = page_count(pdf_path)
+
+    print(f"Info: {total_pages} page(s) on {page_name}", file=sys.stderr)
+    return {"total_pages": total_pages, "annotated_pages": total_pages}

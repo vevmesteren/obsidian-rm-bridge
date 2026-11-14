@@ -25,9 +25,8 @@ export function translateVaultRoot(
   config: PlatformConfig,
 ): string {
   const base = app.vault.adapter.getBasePath();
-  // Drive-letter path → translate. Already-Linux paths (native topologies) pass
-  // through `winToWsl` which rejects non-drive formats; fall back to as-is.
-  if (/^[A-Za-z]:[\\/]/.test(base)) {
+  // Only translate for WSL topology — native topologies pass the path as-is.
+  if (config.topology === "wsl" && /^[A-Za-z]:[\\/]/.test(base)) {
     return winToWsl(base, config.automountRoot);
   }
   return base;

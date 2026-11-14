@@ -35,6 +35,89 @@ __all__ = [
 _IMG_RE = re.compile(r'!\[([^\]]*)\]\(([^)]+)\)')
 # Match Obsidian wiki-embed syntax: ![[image.png]]
 _WIKI_EMBED_RE = re.compile(r'!\[\[([^\]]+)\]\]')
+# Match Obsidian wikilinks: [[note]], [[note|alias]], [[note#heading]], [[note#heading|alias]]
+# Negative lookbehind on '!' avoids matching wiki-embeds (![[image.png]]).
+_WIKILINK_RE = re.compile(r'(?<!\!)\[\[([^\]]+)\]\]')
+
+
+def _resolve_wikilinks(content: str) -> str:
+    """Convert Obsidian wikilinks to their display text (Phase 5c AC-4).
+
+    - ``[[note]]`` → ``note``
+    - ``[[note|alias]]`` → ``alias``
+    - ``[[note#heading]]`` → ``note``  (strip heading anchor)
+    - ``[[note#heading|alias]]`` → ``alias``
+
+    Wikilinks inside fenced code blocks (``` or ~~~) are left untouched so
+    example syntax in code samples is preserved. Inline code (single
+    backticks) is NOT excluded.
+    """
+    def _display(inner: str) -> str:
+        # Take alias after '|' if present, else the whole target.
+        target = inner.split("|", 1)
+        chosen = target[1] if len(target) == 2 else target[0]
+        # Strip the heading anchor (everything after '#') from the chosen part.
+        return chosen.split("#", 1)[0]
+
+    def _replace(match: re.Match) -> str:
+        return _display(match.group(1))
+
+    fence_re = re.compile(r"(```|~~~)")
+    parts = fence_re.split(content)
+    segments: list[str] = []
+    in_code = False
+    buf: list[str] = []
+    for part in parts:
+        if part in ("```", "~~~"):
+            if not in_code:
+                if buf:
+                    segments.append("".join(buf))
+                    buf = []
+                in_code = True
+                buf.append(part)
+            else:
+                buf.append(part)
+                segments.append("".join(buf))
+                buf = []
+                in_code = False
+        else:
+            if in_code:
+                buf.append(part)
+            else:
+                segments.append(_WIKILINK_RE.sub(_replace, part))
+    if buf:
+        segments.append("".join(buf))
+    return "".join(segments)
+
+
+# --- HTML sanitiser (Phase 5c AC-3) -------------------------------------------
+# Allowlist of tags and attributes for bleach.clean(). Raw HTML embedded in a
+# note (e.g. <script>, on* handlers) is stripped before the PDF render so it
+# cannot reach Playwright/Chromium. ``class`` is allowed on every tag so the
+# e-ink CSS (which targets classes like .page-break) keeps working.
+_ALLOWED_TAGS = {
+    "p", "h1", "h2", "h3", "h4", "h5", "h6", "em", "strong", "del", "code",
+    "pre", "a", "ul", "ol", "li", "blockquote", "table", "thead", "tbody",
+    "tr", "th", "td", "img", "br", "hr", "div", "span",
+}
+_ALLOWED_ATTRIBUTES: dict = {
+    "a": ["href", "title", "class"],
+    "img": ["src", "alt", "title", "class"],
+    "*": ["class"],
+}
+
+
+def _sanitize_html(html: str) -> str:
+    """Strip disallowed tags/attributes via bleach (Phase 5c AC-3)."""
+    import bleach
+
+    return bleach.clean(
+        html,
+        tags=_ALLOWED_TAGS,
+        attributes=_ALLOWED_ATTRIBUTES,
+        protocols=["http", "https", "mailto", "data", "file"],
+        strip=True,
+    )
 
 
 def _resolve_image_paths(content: str, base_dir: Path, vault_root: Path | None = None) -> str:
@@ -143,6 +226,12 @@ def md_to_html(md_path: str | os.PathLike, vault_root: str | os.PathLike | None 
     HTML via python-markdown (tables + fenced_code). Resolves relative image
     paths against the source file's directory (Copilot #6). Wiki-embeds are
     resolved against ``vault_root`` when provided (Copilot R3-3).
+
+    Phase 5c AC-4: Obsidian wikilinks (``[[note]]``) are converted to their
+    display text before markdown conversion (controlled by
+    ``render.resolve_wikilinks``, default True). Phase 5c AC-3: the resulting
+    HTML is sanitised via bleach to strip raw ``<script>``/``on*`` payloads
+    (controlled by ``render.sanitize_html``, default True).
     """
     import markdown as md_lib
 
@@ -152,13 +241,23 @@ def md_to_html(md_path: str | os.PathLike, vault_root: str | os.PathLike | None 
     # Strip pulled-annotation marker blocks before rendering so they don't
     # round-trip into the published PDF (Phase 5b feedback loop, ARB R4).
     content = strip_marker_blocks(content)
+    # AC-4: convert wikilinks to display text before markdown rendering.
+    # config.get(key, path=...) — the 2nd arg is a config *path*, NOT a
+    # default, so treat None as the default (True) explicitly.
+    if get("render.resolve_wikilinks") is not False:
+        content = _resolve_wikilinks(content)
     content = render_mermaid_blocks(content, vault_root=str(vault_root) if vault_root is not None else None)
     # Resolve relative image paths to absolute file URIs so Playwright can
     # load them from about:blank (Copilot #6). Expand ~ in vault_root
     # before resolving (adversarial C1 — default vault.path is "~/Documents/Obsidian").
     vr = Path(os.path.expanduser(str(vault_root))).resolve() if vault_root is not None else None
     content = _resolve_image_paths(content, md_path.parent, vault_root=vr)
-    return md_lib.markdown(content, extensions=["tables", "fenced_code"])
+    html = md_lib.markdown(content, extensions=["tables", "fenced_code"])
+    # AC-3: sanitise raw HTML (strip <script>, on* handlers, etc.) unless
+    # explicitly disabled.
+    if get("render.sanitize_html") is not False:
+        html = _sanitize_html(html)
+    return html
 
 
 def wrap_html(html_body: str, *, title: str = "Obsidian page", css: str | None = None) -> str:

@@ -51,6 +51,7 @@ DEFAULTS: dict = {
         "openrouter_api_key": "",
     },
     "pdf": {"font_size": 14, "font_family": "Georgia", "code_font_size": 12},
+    "render": {"sanitize_html": True, "resolve_wikilinks": True},
 }
 
 # Dotted config key -> environment variable that overrides it.
@@ -63,6 +64,8 @@ ENV_OVERRIDES: dict[str, str] = {
     "pdf.font_size": "ORB_PDF_FONT_SIZE",
     "pdf.font_family": "ORB_PDF_FONT_FAMILY",
     "pdf.code_font_size": "ORB_PDF_CODE_FONT_SIZE",
+    "render.sanitize_html": "ORB_SANITIZE_HTML",
+    "render.resolve_wikilinks": "ORB_RESOLVE_WIKILINKS",
 }
 
 # Flat convenience aliases accepted by `ormb config set <key> <value>`.
@@ -77,6 +80,8 @@ FLAT_ALIASES: dict[str, str] = {
     "font_size": "pdf.font_size",
     "font_family": "pdf.font_family",
     "code_font_size": "pdf.code_font_size",
+    "sanitize_html": "render.sanitize_html",
+    "resolve_wikilinks": "render.resolve_wikilinks",
 }
 
 
@@ -152,6 +157,9 @@ def load_config(path: str | os.PathLike | None = None) -> dict:
                     val = int(val)  # type: ignore[assignment]
                 except ValueError:
                     pass
+            # Coerce boolean render settings (accept true/false, 1/0, yes/no).
+            if dotted.startswith("render."):
+                val = val.strip().lower() in ("1", "true", "yes", "on")  # type: ignore[assignment]
             _set_nested(cfg, dotted, val)
     return cfg
 
@@ -186,6 +194,13 @@ def set(key: str, value: str, path: str | os.PathLike | None = None) -> None:
             value = int(value)  # type: ignore[assignment]
         except (ValueError, TypeError):
             pass
+    # Coerce render.* booleans so `get` returns actual bools (Phase 5c AC-3/4).
+    if dotted.startswith("render.") and isinstance(value, str):
+        v = value.strip().lower()
+        if v in ("true", "1", "yes", "on"):
+            value = True
+        elif v in ("false", "0", "no", "off"):
+            value = False
     _set_nested(data, dotted, value)
     # Write with owner-only permissions (0600) to protect API keys
     # from other local users (Copilot R2-1). Use os.open with the mode

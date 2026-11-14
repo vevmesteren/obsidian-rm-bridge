@@ -114,6 +114,8 @@ def _setup_pull_parser(p):
     p.add_argument("--json", action="store_true", help="Emit a JSON result envelope on stdout")
     p.add_argument("--emit", choices=["json"], default=None,
                    help="Output format: 'json' returns sections without writing to disk")
+    p.add_argument("--info", action="store_true",
+                   help="Download + render only; return page counts without calling vision (for the consent modal). Mutually exclusive with --emit/--all.")
     p.add_argument("--vault", default=None, help="Vault root path (overrides config; enables containment check)")
 
 
@@ -253,6 +255,23 @@ def cmd_pull(args) -> int:
     if args.vault:
         vault_root = expand_user_path(args.vault).resolve()
 
+    # Phase 5c AC-5: --info is mutually exclusive with --emit and --all.
+    if args.info:
+        if args.emit == "json":
+            if args.json:
+                _emit_json(False, "cli_error",
+                           "pull --info and --emit json are mutually exclusive", None)
+            else:
+                _eprint("Error: pull --info and --emit json are mutually exclusive.")
+            return 1
+        if args.pull_all:
+            if args.json:
+                _emit_json(False, "cli_error",
+                           "pull --info and --all are mutually exclusive", None)
+            else:
+                _eprint("Error: pull --info and --all are mutually exclusive.")
+            return 1
+
     if args.pull_all:
         if args.emit == "json":
             if args.json:
@@ -324,7 +343,6 @@ def cmd_pull(args) -> int:
             if vault:
                 # Item 7: use expand_user_path (no expandvars) for vault paths.
                 md_path = str(expand_user_path(str(vault)) / md_path)
-
     # Item 11: containment check when --vault is provided.
     if vault_root is not None:
         resolved = Path(md_path).resolve()
@@ -335,6 +353,30 @@ def cmd_pull(args) -> int:
             else:
                 _eprint(f"Error: path resolves outside vault: {resolved}")
             return 1
+
+    # Phase 5c AC-5: --info — page count without calling vision (for the
+    # consent modal). Requires a page_name (no --all). Returns total_pages
+    # and annotated_pages (= total_pages at this stage).
+    if args.info:
+        if not args.page_name:
+            _eprint("Error: pull --info requires a <page-name>")
+            return 2
+        try:
+            info = retriever.retrieve_info(
+                args.page_name, rm_folder=args.rm_folder)
+        except Exception as e:  # noqa: BLE001
+            if args.json:
+                _emit_json(False, _classify_error(e), str(e), None)
+            else:
+                _eprint(f"Error: {e}")
+            return 1
+        if args.json:
+            _emit_json(True, "info",
+                       f"{info['total_pages']} page(s) on {args.page_name}",
+                       info)
+        else:
+            print(json.dumps(info, indent=2))
+        return 0
 
     # Item 3: --emit json returns sections without writing to disk.
     if args.emit == "json":
@@ -402,30 +444,57 @@ def cmd_config(args) -> int:
     return 0
 
 
+# Pinned rmapi release tag (Phase 5c AC-6). Supply-chain hardening: instead
+# of following ``releases/latest`` (which can move unexpectedly), we pin a
+# specific release and verify the downloaded archive's sha256 against the
+# hashes recorded in the GitHub release assets. Update this constant (and
+# RMAPI_SHA256 below) when bumping rmapi.
+RMAPI_VERSION = "v0.0.35"
+# sha256 digests of each release asset (from the GitHub release's `digest`
+# field, recorded at release time). Keyed by asset filename.
+RMAPI_SHA256: dict[str, str] = {
+    "rmapi-linux-amd64.tar.gz": "117616151d11937446ead6972b0934f97155443087f8406141db38fd1ac8fb25",
+    "rmapi-linux-arm64.tar.gz": "645c170d8119b4dcb652cf79612e362fcb032dc0e5869ff520eec1324da39637",
+    "rmapi-macos-arm64.zip": "fb55b6c782b83dc0ccbb236359d738727c4c600378feae920fcab505862f624a",
+    "rmapi-macos-intel.zip": "1afc2c4d73ddde60e22e0ff8d2bc737450dfcaeaa723eb6a3b863ac96cb2102c",
+    "rmapi-win-arm64.zip": "a8c540f72a17228b2a5027d8c26332db9718de3d049742788c0cdd9e30d20268",
+    "rmapi-win64.zip": "f8132c68044f054b2cca14c30d4525ea0fd78b2af175998d2aad5b3c8afcb05b",
+}
+
+
 def _rmapi_asset_url() -> tuple[str, str]:
-    """Return ``(download_url, extracted_binary_name)`` for this platform."""
+    """Return ``(download_url, extracted_binary_name)`` for this platform.
+
+    Phase 5c AC-6: the URL targets a pinned release tag (RMAPI_VERSION)
+    rather than ``releases/latest``, so a malicious/compromised upstream
+    release can't silently change what gets installed. The archive is
+    sha256-verified after download in :func:`cmd_setup`.
+    """
     system = platform.system().lower()
     machine = platform.machine().lower()
     if system == "linux":
         arch = "arm64" if machine in ("aarch64", "arm64") else "amd64"
+        asset = f"rmapi-linux-{arch}.tar.gz"
         return (
-            f"https://github.com/ddvk/rmapi/releases/latest/download/rmapi-linux-{arch}.tar.gz",
+            f"https://github.com/ddvk/rmapi/releases/download/{RMAPI_VERSION}/{asset}",
             "rmapi",
         )
     if system == "darwin":
         # ddvk/rmapi publishes macOS assets as ZIP, not tar.gz (Copilot #5).
         # Asset names: rmapi-macos-arm64.zip, rmapi-macos-intel.zip
         arch = "arm64" if machine == "arm64" else "intel"
+        asset = f"rmapi-macos-{arch}.zip"
         return (
-            f"https://github.com/ddvk/rmapi/releases/latest/download/rmapi-macos-{arch}.zip",
+            f"https://github.com/ddvk/rmapi/releases/download/{RMAPI_VERSION}/{asset}",
             "rmapi",
         )
     if system in ("windows", "win32"):
         # ddvk/rmapi publishes Windows assets as ZIP (Copilot #5).
         # Include ARM64 support (adversarial I2).
         arch = "win-arm64" if machine in ("arm64", "aarch64") else "win64"
+        asset = f"rmapi-{arch}.zip"
         return (
-            f"https://github.com/ddvk/rmapi/releases/latest/download/rmapi-{arch}.zip",
+            f"https://github.com/ddvk/rmapi/releases/download/{RMAPI_VERSION}/{asset}",
             "rmapi.exe",
         )
     raise RuntimeError(f"unsupported platform: {system} {machine}")
@@ -433,17 +502,37 @@ def _rmapi_asset_url() -> tuple[str, str]:
 
 def cmd_setup(args) -> int:
     if args.rmapi:
+        import hashlib as _hashlib
+
         url, bin_name = _rmapi_asset_url()
+        asset_name = Path(url).name
+        expected_sha = RMAPI_SHA256.get(asset_name)
         dest = Path.home() / ".local" / "bin"
         dest.mkdir(parents=True, exist_ok=True)
-        _eprint(f"Downloading rmapi from {url} ...")
+        _eprint(f"Downloading rmapi {RMAPI_VERSION} from {url} ...")
         import requests
 
         with tempfile.TemporaryDirectory() as tmp:
-            archive = Path(tmp) / Path(url).name
+            archive = Path(tmp) / asset_name
             resp = requests.get(url, timeout=120)
             resp.raise_for_status()
             archive.write_bytes(resp.content)
+            # Phase 5c AC-6: verify the sha256 of the downloaded archive before
+            # extracting. Reject on mismatch so a tampered/compromised asset
+            # can't reach the install dir.
+            actual_sha = _hashlib.sha256(archive.read_bytes()).hexdigest()
+            if expected_sha is None:
+                raise RuntimeError(
+                    f"No sha256 recorded for rmapi asset '{asset_name}' at "
+                    f"{RMAPI_VERSION}. Refusing to install an unverified binary."
+                )
+            if actual_sha != expected_sha:
+                raise RuntimeError(
+                    f"rmapi archive sha256 mismatch for '{asset_name}': "
+                    f"expected {expected_sha}, got {actual_sha}. "
+                    f"Refusing to install (possible tampering or wrong release)."
+                )
+            _eprint(f"sha256 verified: {actual_sha}")
             if archive.suffix == ".zip":
                 with zipfile.ZipFile(archive) as z:
                     z.extractall(tmp)
@@ -457,7 +546,7 @@ def cmd_setup(args) -> int:
             src = Path(tmp) / bin_name
             shutil.copy2(src, dest / bin_name)
             os.chmod(dest / bin_name, 0o755)
-        _eprint(f"Installed rmapi to {dest / bin_name}")
+        _eprint(f"Installed rmapi {RMAPI_VERSION} to {dest / bin_name}")
         _eprint("Ensure that directory is on your PATH.")
         return 0
     _eprint("Installing Playwright Chromium browser...")

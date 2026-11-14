@@ -93,6 +93,94 @@ def test_publish_page_failure_propagates(tmp_path):
         publisher.publish_page(md, rm_folder="/Obsidian")
 
 
+# --- Phase 5c AC-3: HTML sanitiser (bleach) ---------------------------------
+
+
+def test_md_to_html_strips_script_tag(tmp_path):
+    """AC-3 TC-1: <script> tag is stripped from the HTML output."""
+    md = tmp_path / "page.md"
+    md.write_text("# Title\n\n<script>alert(1)</script>\n\nText.\n")
+    html = publisher.md_to_html(md)
+    assert "<script>" not in html
+    assert "</script>" not in html
+    assert "<h1>Title</h1>" in html
+
+
+def test_md_to_html_preserves_allowed_tags(tmp_path):
+    """AC-3 TC-2: allowed tags (<p>, <strong>, <a href>) survive sanitising."""
+    md = tmp_path / "page.md"
+    md.write_text("# Title\n\n**bold** and [a link](https://example.com)\n")
+    html = publisher.md_to_html(md)
+    assert "<strong>bold</strong>" in html
+    assert '<a href="https://example.com"' in html
+
+
+def test_md_to_html_sanitiser_disabled(tmp_path, tmp_config):
+    """AC-3 TC-3: with render.sanitize_html = False, raw <script> survives."""
+    from obsidian_rm_bridge import config as cfg
+    cfg.set("render.sanitize_html", "false")
+    assert cfg.get("render.sanitize_html") is False
+    md = tmp_path / "page.md"
+    md.write_text("# Title\n\n<script>alert(1)</script>\n")
+    html = publisher.md_to_html(md)
+    assert "<script>alert(1)</script>" in html
+
+
+def test_md_to_html_strips_onclick_handler(tmp_path):
+    """AC-3 TC-4: on* event-handler attributes are stripped."""
+    md = tmp_path / "page.md"
+    md.write_text('# Title\n\n<p onclick="evil()">text</p>\n')
+    html = publisher.md_to_html(md)
+    assert "onclick" not in html
+    assert "evil" not in html
+
+
+# --- Phase 5c AC-4: wikilink pre-pass ---------------------------------------
+
+
+def test_resolve_wikilinks_basic():
+    """AC-4 TC-1: [[note]] → note (as text)."""
+    out = publisher._resolve_wikilinks("See [[note]] here.")
+    assert "[[note]]" not in out
+    assert "See note here." == out
+
+
+def test_resolve_wikilinks_alias():
+    """AC-4 TC-2: [[note|alias]] → alias."""
+    out = publisher._resolve_wikilinks("Link to [[note|my alias]] now.")
+    assert "[[" not in out
+    assert "my alias" in out
+    assert "note" not in out.replace("now", "")
+
+
+def test_resolve_wikilinks_heading():
+    """AC-4 TC-3: [[note#heading]] → note (heading anchor stripped)."""
+    out = publisher._resolve_wikilinks("Ref [[note#section]] end.")
+    assert "[[" not in out
+    assert "note" in out
+    assert "#section" not in out
+
+
+def test_resolve_wikilinks_disabled_in_md_to_html(tmp_path, tmp_config):
+    """AC-4 TC-4: with render.resolve_wikilinks = False, [[note]] survives."""
+    from obsidian_rm_bridge import config as cfg
+    cfg.set("render.resolve_wikilinks", "false")
+    assert cfg.get("render.resolve_wikilinks") is False
+    md = tmp_path / "page.md"
+    md.write_text("Link [[note]] inline.\n")
+    html = publisher.md_to_html(md)
+    assert "[[note]]" in html
+
+
+def test_resolve_wikilinks_skips_code_blocks():
+    """Wikilinks inside fenced code blocks are left untouched."""
+    content = "Before [[real]] here.\n\n```\n[[inside-code]]\n```\n\nAfter [[also-real]].\n"
+    out = publisher._resolve_wikilinks(content)
+    assert "[[inside-code]]" in out
+    assert "real" in out
+    assert "also-real" in out
+
+
 # --- image path resolution (Copilot R2/R3) ---------------------------------
 
 
