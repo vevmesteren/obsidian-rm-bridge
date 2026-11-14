@@ -233,15 +233,32 @@ from Obsidian:
    "Obsidian reMarkable Bridge".
 2. Click **Install**, then **Enable**.
 
-Until then, install manually from a release zip:
+Until then, install from source with the install script:
 
-1. Download `main.js`, `manifest.json`, and `styles.css` from the latest
-   [release](https://github.com/vevmesteren/obsidian-rm-bridge/releases).
-2. Create a vault folder:
-   `<vault>/.obsidian/plugins/obsidian-rm-bridge/`
-3. Copy the three files into that folder.
-4. In Obsidian: **Settings → Community plugins**, turn off "Safe mode" if
-   prompted, then **enable** "Obsidian reMarkable Bridge".
+```bash
+# From the repo root — builds the plugin and copies it to your vault
+./scripts/install-plugin.sh <vault-path>
+# e.g. ./scripts/install-plugin.sh /mnt/c/dev/veviki
+# e.g. ./scripts/install-plugin.sh ~/Documents/Obsidian
+# e.g. ./scripts/install-plugin.sh 'C:\dev\MyVault'
+```
+
+The script runs `npm run build` and copies `main.js` + `manifest.json` into
+`<vault>/.obsidian/plugins/obsidian-rm-bridge/`. It handles WSL paths
+(`/mnt/c/...`) and Windows paths (`C:\...`) automatically.
+
+For step-by-step per-topology instructions, see:
+
+- **[T-WSL](docs/INSTALL-T-WSL.md)** — Obsidian on Windows, CLI in WSL2 (primary)
+- **[T-MAC](docs/INSTALL-T-MAC.md)** — Obsidian on macOS, native CLI
+- **[T-LINUX](docs/INSTALL-T-LINUX.md)** — Obsidian on Linux, native CLI
+- **[T-WIN](docs/INSTALL-T-WIN.md)** — Obsidian on Windows, native CLI (no WSL)
+
+After installing:
+
+1. In Obsidian: **Settings → Community plugins** → enable "Obsidian reMarkable Bridge"
+2. Open the plugin settings tab → set the **Python binary** path
+3. Click **Test connection** — all checks should pass
 
 ### Usage
 
