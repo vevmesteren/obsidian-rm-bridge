@@ -523,9 +523,11 @@ def cmd_doctor(args) -> int:
         vault_status = "not_set"
         errors.append("vault.path not configured")
 
-    # paired
-    rmapi_token = Path.home() / ".rmapi"
-    paired = rmapi_token.exists()
+    # paired — rmapi stores its config at ~/.config/rmapi/rmapi.conf (XDG)
+    # or ~/.rmapi (legacy). Check both.
+    rmapi_xdg = Path.home() / ".config" / "rmapi" / "rmapi.conf"
+    rmapi_legacy = Path.home() / ".rmapi"
+    paired = rmapi_xdg.exists() or rmapi_legacy.exists()
     if not paired:
         errors.append("reMarkable not paired (run 'ormb pair')")
 

@@ -638,3 +638,44 @@ def test_pull_all_emit_json_blocked(tmp_config, capsys):
     env = json.loads(capsys.readouterr().out)
     assert env["ok"] is False
     assert env["code"] == "cli_error"
+
+
+# --- Doctor pairing path detection (XDG vs legacy) ---
+
+
+def test_doctor_paired_xdg_config(tmp_config, capsys, tmp_path, monkeypatch):
+    """Doctor detects pairing via ~/.config/rmapi/rmapi.conf (XDG path)."""
+    # Simulate XDG config existing, legacy not existing
+    xdg_dir = tmp_path / ".config" / "rmapi"
+    xdg_dir.mkdir(parents=True)
+    (xdg_dir / "rmapi.conf").write_text("[test]\n")
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    with patch("obsidian_rm_bridge.cli.rmapi_client.resolve_rmapi", return_value=str(tmp_path / "rmapi")):
+        rc = cli.main(["doctor", "--json"])
+    import json
+    report = json.loads(capsys.readouterr().out)
+    assert report["paired"] is True, "doctor should detect XDG rmapi.conf as paired"
+
+
+def test_doctor_paired_legacy(tmp_config, capsys, tmp_path, monkeypatch):
+    """Doctor detects pairing via ~/.rmapi (legacy path)."""
+    legacy = tmp_path / ".rmapi"
+    legacy.mkdir()
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    with patch("obsidian_rm_bridge.cli.rmapi_client.resolve_rmapi", return_value=str(tmp_path / "rmapi")):
+        rc = cli.main(["doctor", "--json"])
+    import json
+    report = json.loads(capsys.readouterr().out)
+    assert report["paired"] is True, "doctor should detect legacy ~/.rmapi as paired"
+
+
+def test_doctor_not_paired(tmp_config, capsys, tmp_path, monkeypatch):
+    """Doctor reports paired=false when neither XDG nor legacy config exists."""
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    with patch("obsidian_rm_bridge.cli.rmapi_client.resolve_rmapi", return_value=None):
+        rc = cli.main(["doctor", "--json"])
+    assert rc == 1
+    import json
+    report = json.loads(capsys.readouterr().out)
+    assert report["paired"] is False
+    assert "reMarkable not paired (run 'ormb pair')" in report["errors"]
