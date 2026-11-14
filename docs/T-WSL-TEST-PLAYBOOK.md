@@ -9,19 +9,38 @@
 ## 0. Pre-flight (WSL terminal)
 
 ```bash
+# Activate the venv first — ormb lives there
+source .venv/bin/activate
+
 # Verify CLI is alive and healthy
 ormb doctor --json
 
 # Expected: ok=true, version="0.1.0", rmapi.found=true, paired=true, key_present=true
 # If key_present=false: ormb config set openrouter_api_key sk-...
-# If paired=false: ormb pair
-
-# Verify vault path is set
-ormb config show
-# vault.path should point to your Obsidian vault, e.g. /mnt/c/dev/veviki
+# If paired=false: ormb pair  (one-time, needs a code from my.remarkable.com/device)
+# If vault not reachable: ormb config set vault.path /mnt/c/dev/veviki
 ```
 
-**Pass criteria:** doctor reports `ok=true`, `paired=true`, `key_present=true`.
+**Pass criteria:** doctor reports `ok=true`, `paired=true`, `key_present=true`, `vault: "reachable"`.
+
+**Blocker:** If `paired=false`, stop here and run `ormb pair` before proceeding. Most test cases require a paired reMarkable.
+
+---
+
+## 0.5. Pair reMarkable (if not already paired)
+
+If `ormb doctor --json` shows `paired: false`:
+
+1. Go to [my.remarkable.com/device](https://my.remarkable.com/device) on your phone or browser
+2. Get a one-time pairing code
+3. In WSL terminal (venv active):
+   ```bash
+   ormb pair
+   ```
+4. Enter the code when prompted
+5. Re-run `ormb doctor --json` — verify `paired: true`
+
+**Pass criteria:** `paired: true` in doctor output.
 
 ---
 
@@ -231,6 +250,7 @@ ormb config show
 | # | Test | Pass/Fail | Notes |
 |---|------|-----------|-------|
 | 0 | Pre-flight | | |
+| 0.5 | Pair reMarkable | | |
 | 1 | Plugin install | | |
 | 2 | Plugin settings | | |
 | 3 | Happy publish | | |
