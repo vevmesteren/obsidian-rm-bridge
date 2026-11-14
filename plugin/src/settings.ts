@@ -13,14 +13,15 @@ import { NOTICE_OK_TIMEOUT, NOTICE_WARN_TIMEOUT } from "./notice.ts";
 export const DEFAULT_SETTINGS = {
   launcher: "python -m obsidian_rm_bridge",
   distro: "Ubuntu",
-  pythonBin: "/home/u/.venvs/ormb/bin/python",
+  pythonBin: "",
   rmFolder: "/Obsidian",
   visionModel: "",
   automountRoot: "/mnt",
   pullConsentGiven: false,
-  // Default to the proven WSL topology; users on macOS/Linux/native Windows
-  // switch via the dropdown below (or select 'auto' to detect at load).
-  topology: "wsl" as const,
+  // Default to auto-detect so macOS/Linux/native Windows users get the
+  // correct adapter without manual configuration. detectTopology() picks
+  // WSL on Windows when available, otherwise native.
+  topology: "auto" as const,
 };
 
 export type OrmbSettingsWithDefaults = typeof DEFAULT_SETTINGS;

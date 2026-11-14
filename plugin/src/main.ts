@@ -150,7 +150,8 @@ export default class ObsidianRmBridgePlugin extends Plugin {
       rmFolder: s.rmFolder,
       visionModel: s.visionModel,
       automountRoot: s.automountRoot,
-      topology: s.topology,
+      // Pass the resolved topology so VaultBridge translates paths only for WSL.
+      topology: this.activeTopology,
     };
   }
 

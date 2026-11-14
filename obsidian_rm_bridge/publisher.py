@@ -36,7 +36,8 @@ _IMG_RE = re.compile(r'!\[([^\]]*)\]\(([^)]+)\)')
 # Match Obsidian wiki-embed syntax: ![[image.png]]
 _WIKI_EMBED_RE = re.compile(r'!\[\[([^\]]+)\]\]')
 # Match Obsidian wikilinks: [[note]], [[note|alias]], [[note#heading]], [[note#heading|alias]]
-_WIKILINK_RE = re.compile(r'\[\[([^\]]+)\]\]')
+# Negative lookbehind on '!' avoids matching wiki-embeds (![[image.png]]).
+_WIKILINK_RE = re.compile(r'(?<!\!)\[\[([^\]]+)\]\]')
 
 
 def _resolve_wikilinks(content: str) -> str:
@@ -114,6 +115,7 @@ def _sanitize_html(html: str) -> str:
         html,
         tags=_ALLOWED_TAGS,
         attributes=_ALLOWED_ATTRIBUTES,
+        protocols=["http", "https", "mailto", "data", "file"],
         strip=True,
     )
 

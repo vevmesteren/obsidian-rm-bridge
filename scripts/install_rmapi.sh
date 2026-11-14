@@ -10,8 +10,8 @@ set -euo pipefail
 
 RMAPI_VERSION="v0.0.35"
 
-SYSTEM="$(uname -s | tr '[:upper:]'[:lower:]')"
-MACHINE="$(uname -m | tr '[:upper:]'[:lower:]')"
+SYSTEM="$(uname -s | tr '[:upper:]' '[:lower:]')"
+MACHINE="$(uname -m | tr '[:upper:]' '[:lower:]')"
 
 case "${SYSTEM}:${MACHINE}" in
   linux:aarch64|linux:arm64) ASSET="rmapi-linux-arm64.tar.gz"
@@ -35,7 +35,12 @@ trap 'rm -rf "${TMP}"' EXIT
 curl -fsSL "${URL}" -o "${TMP}/${ASSET}"
 
 # Verify sha256 before extracting (Phase 5c AC-6).
-ACTUAL="$(sha256sum "${TMP}/${ASSET}" | awk '{print $1}')"
+# Use shasum on macOS (no sha256sum), sha256sum on Linux.
+if command -v sha256sum >/dev/null 2>&1; then
+  ACTUAL="$(sha256sum "${TMP}/${ASSET}" | awk '{print $1}')"
+else
+  ACTUAL="$(shasum -a 256 "${TMP}/${ASSET}" | awk '{print $1}')"
+fi
 if [ "${ACTUAL}" != "${SHA256}" ]; then
   echo "sha256 mismatch for ${ASSET}: expected ${SHA256}, got ${ACTUAL}" >&2
   echo "Refusing to install (possible tampering or wrong release)." >&2

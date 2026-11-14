@@ -272,15 +272,16 @@ def test_retrieve_to_json_corrupt_cache_does_not_crash(tmp_path, tmp_config):
 
 
 def test_retrieve_info_returns_page_count_without_vision(tmp_path, tmp_config):
-    """AC-5 TC-1: retrieve_info returns total_pages from rendered PNGs and
-    does NOT call the vision model."""
+    """AC-5 TC-1: retrieve_info returns total_pages from pymupdf page_count
+    and does NOT call the vision model or render PNGs."""
     pdf = _make_pdf(tmp_path)
     with patch("obsidian_rm_bridge.retriever.rmapi_client.refresh"), \
          patch("obsidian_rm_bridge.retriever.rmapi_client.geta", return_value=pdf), \
-         patch("obsidian_rm_bridge.retriever.render_pdf_to_pngs",
-               return_value=["/tmp/p1.png", "/tmp/p2.png", "/tmp/p3.png"]), \
+         patch("obsidian_rm_bridge.retriever.render_pdf_to_pngs") as m_render, \
+         patch("obsidian_rm_bridge.retriever.page_count", return_value=3) as m_count, \
          patch("obsidian_rm_bridge.retriever.vision_client.transcribe_pages") as m_trans:
         info = retriever.retrieve_info("my-page", rm_folder="/Obsidian")
     assert info["total_pages"] == 3
     assert info["annotated_pages"] == 3
     m_trans.assert_not_called()
+    m_render.assert_not_called()

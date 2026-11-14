@@ -21,6 +21,7 @@ from pathlib import Path
 from . import config as cfg_mod
 from . import rmapi_client, vision_client
 from .config import get
+from .pdf_renderer import page_count
 
 __all__ = [
     "append_annotations",
@@ -79,6 +80,12 @@ class PullCache:
                 json.dump(data, f, indent=2)
         except OSError as e:  # best-effort cache
             print(f"Warning: could not write pull cache: {e}", file=sys.stderr)
+        else:
+            # Restrict permissions — cache contains transcribed handwriting.
+            try:
+                os.chmod(self.path, 0o600)
+            except OSError:
+                pass
 
 
 def render_pdf_to_pngs(pdf_path: str | os.PathLike, output_dir: str | os.PathLike, *, dpi: int = 300) -> list:
@@ -223,12 +230,15 @@ def retrieve_to_json(
         print(f"Downloading annotated PDF from {rm_path}...", file=sys.stderr)
         pdf_path = rmapi_client.geta(rm_path, tmpdir)
 
-        # AC-1: cache by PDF content hash so re-pulling an unchanged document
-        # skips the (paid) vision pipeline. The hash is over the downloaded
-        # PDF bytes — if the annotations change, the PDF hash changes too.
+        # AC-1: cache by PDF content hash + vision model so re-pulling an
+        # unchanged document skips the (paid) vision pipeline. The hash is
+        # over the downloaded PDF bytes — if the annotations change, the PDF
+        # hash changes too. The model is included so changing vision.model
+        # invalidates the cache.
         pdf_hash = hashlib.sha256(Path(pdf_path).read_bytes()).hexdigest()
+        cache_key = f"{pdf_hash}:{model or 'default'}"
         cache = PullCache()
-        cached = cache.get(pdf_hash)
+        cached = cache.get(cache_key)
         if cached is not None:
             print("Cache hit — skipping vision pipeline", file=sys.stderr)
             return cached
@@ -259,8 +269,8 @@ def retrieve_to_json(
         "annotated_pages": len(sections),
         "timestamp": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
-    # AC-1: store the result so the next pull of the same PDF hits the cache.
-    cache.put(pdf_hash, result)
+    # AC-1: store the result so the next pull of the same PDF + model hits.
+    cache.put(cache_key, result)
     return result
 
 
@@ -289,9 +299,8 @@ def retrieve_info(
         print(f"Downloading annotated PDF from {rm_path}...", file=sys.stderr)
         pdf_path = rmapi_client.geta(rm_path, tmpdir)
 
-        print("Rendering PDF pages to PNG (info mode)...", file=sys.stderr)
-        png_paths = render_pdf_to_pngs(pdf_path, tmpdir)
-        total_pages = len(png_paths)
+        # Use pymupdf page_count (metadata read) instead of rendering PNGs.
+        total_pages = page_count(pdf_path)
 
     print(f"Info: {total_pages} page(s) on {page_name}", file=sys.stderr)
     return {"total_pages": total_pages, "annotated_pages": total_pages}

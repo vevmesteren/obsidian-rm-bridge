@@ -64,7 +64,7 @@ export function applyMarkerBlock(
   const cleaned = stripExistingAnnotations(content);
   const date = dateStr ?? new Date().toISOString().slice(0, 10);
   const bullets = data.sections
-    .map((s) => `- ${s.text.trim()}`)
+    .map((s) => `- ${s.text.trim().replace(/\n+/g, " ")}`)
     .join("\n");
   return `${cleaned}\n${markerBlock}\n## [${date}] Annotations\n\n${bullets}\n`;
 }
