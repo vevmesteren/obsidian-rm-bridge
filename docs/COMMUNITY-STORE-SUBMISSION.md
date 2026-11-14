@@ -1,5 +1,9 @@
 # Community Store Submission
 
+> **Audience:** Repo maintainer (operator only)
+
+← Back to [README](../README.md)
+
 Checklist and process for submitting the **Obsidian reMarkable Bridge** plugin
 to the [Obsidian community plugin store](https://obsidian.md/plugins).
 
@@ -58,14 +62,14 @@ section covering:
 
 ### Screenshot placeholders in README
 
-`README.md` references two screenshots:
+`README.md` references two screenshots (as text placeholders until captured):
 
 - `docs/screenshots/publish.png` — Publish command
 - `docs/screenshots/pull.png` — Pull command
 
 > **Operator action:** capture these during the E2E test pass and commit the
-> PNGs before the community-store PR. The placeholders render as broken
-> images until then, which is expected at this stage.
+> PNGs before the community-store PR. The README shows a "Coming soon" note
+> until then.
 
 ### Banned patterns enforced by CI
 

@@ -1,5 +1,9 @@
 # T-MAC Install — Obsidian on macOS, ormb CLI native
 
+> **Audience:** Users on macOS (untested — seeking community testers)
+
+← Back to [README](../README.md)
+
 ## Prerequisites
 
 - macOS 12+ (Apple Silicon or Intel)

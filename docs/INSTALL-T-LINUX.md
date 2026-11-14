@@ -1,5 +1,9 @@
 # T-LINUX Install — Obsidian on Linux, ormb CLI native
 
+> **Audience:** Users on Linux desktop (untested — seeking community testers)
+
+← Back to [README](../README.md)
+
 ## Prerequisites
 
 - Linux desktop (Ubuntu 22.04+, Fedora 38+, or equivalent)

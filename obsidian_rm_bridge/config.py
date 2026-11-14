@@ -47,7 +47,6 @@ DEFAULTS: dict = {
     "rmapi": {"path": ""},
     "vision": {
         "model": "z-ai/glm-4.5v",
-        "cross_verify_model": "gpt-4o",
         "openrouter_api_key": "",
     },
     "pdf": {"font_size": 14, "font_family": "Georgia", "code_font_size": 12},
@@ -59,7 +58,6 @@ ENV_OVERRIDES: dict[str, str] = {
     "vault.path": "ORB_VAULT_PATH",
     "remarkable.folder": "ORB_RM_FOLDER",
     "vision.model": "ORB_VISION_MODEL",
-    "vision.cross_verify_model": "ORB_VISION_CROSS_VERIFY_MODEL",
     "vision.openrouter_api_key": "OPENROUTER_API_KEY",
     "pdf.font_size": "ORB_PDF_FONT_SIZE",
     "pdf.font_family": "ORB_PDF_FONT_FAMILY",
@@ -75,7 +73,6 @@ FLAT_ALIASES: dict[str, str] = {
     "vault_path": "vault.path",
     "rm_folder": "remarkable.folder",
     "vision_model": "vision.model",
-    "cross_verify_model": "vision.cross_verify_model",
     "openrouter_api_key": "vision.openrouter_api_key",
     "font_size": "pdf.font_size",
     "font_family": "pdf.font_family",

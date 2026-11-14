@@ -1,5 +1,9 @@
 # T-WIN Install — Obsidian on Windows, ormb CLI native (no WSL)
 
+> **Audience:** Users on Windows without WSL (untested — seeking community testers)
+
+← Back to [README](../README.md)
+
 ## Prerequisites
 
 - Windows 10/11

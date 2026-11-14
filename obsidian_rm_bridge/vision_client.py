@@ -2,8 +2,7 @@
 
 Sends each rendered PDF page (PNG) to a vision-capable model and returns the
 transcribed handwritten annotations. The model is configurable; the default is
-GLM-4.5V (``z-ai/glm-4.5v``) via OpenRouter. When accuracy matters, run a
-second model and cross-verify (DC-9).
+GLM-4.5V (``z-ai/glm-4.5v``) via OpenRouter.
 """
 
 from __future__ import annotations
@@ -19,7 +18,6 @@ __all__ = [
     "NO_ANNOTATIONS_MARKER",
     "OPENROUTER_URL",
     "VISION_PROMPT",
-    "cross_verify",
     "transcribe_page",
     "transcribe_pages",
 ]
@@ -140,20 +138,3 @@ def transcribe_pages(
             f"Check API key and network connectivity."
         )
     return out
-
-
-def cross_verify(
-    png_path: str | Path,
-    api_key: str,
-    *,
-    primary_model: str = DEFAULT_MODEL,
-    cross_verify_model: str = "gpt-4o",
-) -> tuple[str | None, str | None]:
-    """Run two models on the same page and return ``(primary_text, verify_text)``.
-
-    Use when transcription accuracy matters (DC-9). When both agree (same text,
-    or both ``None``) the result is trustworthy; disagree → review manually.
-    """
-    primary = transcribe_page(png_path, api_key, model=primary_model)
-    verify = transcribe_page(png_path, api_key, model=cross_verify_model)
-    return primary, verify

@@ -3,7 +3,7 @@
 Refactored from the proven veviki-remarkable-bridge ``retrieve.py``:
 - rmapi ``refresh`` is mandatory before ``geta`` (DC-5)
 - every PDF page goes to the vision model — no pre-filtering by drawing count (DC-6)
-- annotations appended as ``## Annotations from reMarkable — YYYY-MM-DD`` (DC-7)
+- annotations appended as ``## [YYYY-MM-DD] Annotations`` (DC-7)
 - vision model is configurable (DC-4)
 No veviki or Hermes paths — config comes from :mod:`config` (DC-3).
 """

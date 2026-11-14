@@ -1,4 +1,8 @@
-# T-WSL Operator Test Playbook
+# T-WSL Test Playbook — End-to-End Operator Testing
+
+> **Audience:** Operator (repo maintainer) — not for end users
+
+← Back to [README](../README.md)
 
 > **Topology:** T-WSL — Obsidian on Windows, `ormb` CLI in WSL2 Ubuntu
 > **Tester:** Valentin
@@ -126,7 +130,7 @@ If `ormb doctor --json` shows `paired: false`:
 6. Observe the Notice: should say "Pulled N annotation(s) ✓"
 7. Check the note content:
    - Marker block present: `<!-- ormb:annotations doc="..." rev="..." -->`
-   - Sections formatted as `## Page N` with transcribed text
+   - Sections formatted as `## [YYYY-MM-DD] Annotations` with transcribed text
    - No duplication of existing content
 
 **Pass criteria:** Consent modal shown. Annotations appear in note with page headers. Marker block present.
@@ -230,7 +234,7 @@ If `ormb doctor --json` shows `paired: false`:
 ## 13. Marker block strip on republish
 
 1. After pulling annotations (marker block present in note), republish with content-only
-2. Check the PDF on reMarkable: the `<!-- ormb:annotations -->` block and `## Page N` sections should **NOT** appear in the PDF
+2. Check the PDF on reMarkable: the `<!-- ormb:annotations -->` block and `## [YYYY-MM-DD] Annotations` sections should **NOT** appear in the PDF
 3. They're stripped by `strip_marker_blocks()` in the CLI before rendering
 
 **Pass criteria:** Marker blocks don't round-trip as content in the published PDF.

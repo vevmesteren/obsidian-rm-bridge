@@ -1,5 +1,9 @@
 # T-WSL Install — Obsidian on Windows, ormb CLI in WSL2
 
+> **Audience:** Users on Windows with WSL2 (primary, E2E-tested topology)
+
+← Back to [README](../README.md)
+
 ## Prerequisites
 
 - Windows 10/11 with WSL2 (Ubuntu recommended)
@@ -16,6 +20,7 @@ git clone https://github.com/vevmesteren/obsidian-rm-bridge.git
 cd obsidian-rm-bridge
 
 # Create a venv and install
+# (developers: use pip install -e ".[dev]" to include test dependencies)
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
