@@ -254,21 +254,22 @@ export default class ObsidianRmBridgePlugin extends Plugin {
           noticeForResult(res);
         } else {
           const pullData = res.data as OrmbPullData;
-        // Guard against empty pulls — don't wipe existing annotations if
-        // the transcription returned nothing (grok C1).
-        if (
-          !pullData.sections || pullData.sections.length === 0 ||
-          pullData.annotated_pages === 0
-        ) {
-          new Notice("No annotations found — existing annotations preserved.");
-        } else {
-          const markerBlock = buildMarkerBlock(pullData);
-          // Atomic, undo-able write: vault.process reads current content and
-          // applies the replace-not-duplicate transform in one step.
-          await this.app.vault.process(file, (current) =>
-            applyMarkerBlock(current, markerBlock, pullData),
-          );
-          new Notice(`Pulled ${pullData.annotated_pages} annotation(s) ✓`);
+          // Guard against empty pulls — don't wipe existing annotations if
+          // the transcription returned nothing (grok C1).
+          if (
+            !pullData.sections || pullData.sections.length === 0 ||
+            pullData.annotated_pages === 0
+          ) {
+            new Notice("No annotations found — existing annotations preserved.");
+          } else {
+            const markerBlock = buildMarkerBlock(pullData);
+            // Atomic, undo-able write: vault.process reads current content and
+            // applies the replace-not-duplicate transform in one step.
+            await this.app.vault.process(file, (current) =>
+              applyMarkerBlock(current, markerBlock, pullData),
+            );
+            new Notice(`Pulled ${pullData.annotated_pages} annotation(s) ✓`);
+          }
         }
       } else {
         noticeForResult(res, "Pulled");
