@@ -19,10 +19,14 @@ jobs:
       run:
         working-directory: plugin
     steps:
-      - uses: actions/checkout@v4
+      # Phase 5c AC-6: SHA-pinned actions (floating @v4 refs replaced with
+      # immutable commit SHAs). Update the SHA and the comment together.
+      # actions/checkout@v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        # actions/setup-node@v4.1.0
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af
         with:
           node-version: "22"
           cache: npm

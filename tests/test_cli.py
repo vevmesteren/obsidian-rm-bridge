@@ -342,6 +342,32 @@ def test_pull_emit_json_no_file_write(tmp_config, tmp_path):
     assert md.read_text() == original  # file untouched
 
 
+# --- Phase 5c AC-5: pull --info ---
+
+
+def test_pull_info_json_envelope(tmp_config, capsys):
+    """AC-5 TC-2: pull --info --json emits {ok, code:"info", data:{total_pages,...}}."""
+    with patch("obsidian_rm_bridge.cli.retriever.retrieve_info",
+               return_value={"total_pages": 4, "annotated_pages": 4}):
+        rc = cli.main(["pull", "my-page", "--info", "--json", "--rm-folder", "/Obsidian"])
+    assert rc == 0
+    import json
+    env = json.loads(capsys.readouterr().out)
+    assert env["ok"] is True
+    assert env["code"] == "info"
+    assert env["data"]["total_pages"] == 4
+    assert env["data"]["annotated_pages"] == 4
+
+
+def test_pull_info_mutually_exclusive_with_emit(tmp_config, capsys):
+    """AC-5: --info and --emit json are mutually exclusive."""
+    rc = cli.main(["pull", "page", "--info", "--emit", "json", "--json"])
+    assert rc == 1
+    env = __import__("json").loads(capsys.readouterr().out)
+    assert env["ok"] is False
+    assert env["code"] == "cli_error"
+
+
 # --- Item 5: --vault flag ---
 
 
@@ -651,7 +677,7 @@ def test_doctor_paired_xdg_config(tmp_config, capsys, tmp_path, monkeypatch):
     (xdg_dir / "rmapi.conf").write_text("[test]\n")
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     with patch("obsidian_rm_bridge.cli.rmapi_client.resolve_rmapi", return_value=str(tmp_path / "rmapi")):
-        rc = cli.main(["doctor", "--json"])
+        cli.main(["doctor", "--json"])
     import json
     report = json.loads(capsys.readouterr().out)
     assert report["paired"] is True, "doctor should detect XDG rmapi.conf as paired"
@@ -663,7 +689,7 @@ def test_doctor_paired_legacy(tmp_config, capsys, tmp_path, monkeypatch):
     legacy.mkdir()
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     with patch("obsidian_rm_bridge.cli.rmapi_client.resolve_rmapi", return_value=str(tmp_path / "rmapi")):
-        rc = cli.main(["doctor", "--json"])
+        cli.main(["doctor", "--json"])
     import json
     report = json.loads(capsys.readouterr().out)
     assert report["paired"] is True, "doctor should detect legacy ~/.rmapi as paired"
