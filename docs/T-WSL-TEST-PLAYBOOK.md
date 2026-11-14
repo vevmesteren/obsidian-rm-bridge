@@ -251,22 +251,22 @@ If `ormb doctor --json` shows `paired: false`:
 
 | # | Test | Pass/Fail | Notes |
 |---|------|-----------|-------|
-| 0 | Pre-flight | | |
-| 0.5 | Pair reMarkable | | |
-| 1 | Plugin install | | |
-| 2 | Plugin settings | | |
-| 3 | Happy publish | | |
-| 4 | Happy pull + consent | | |
-| 5 | Pull idempotent | | |
-| 6 | Republish content-only | | |
-| 7 | doc_exists | | |
-| 8 | Cancel consent | | |
-| 9 | Empty pull | | |
-| 10 | Concurrent single-flight | | |
-| 11 | No API key | | |
-| 12 | rmapi not paired | | |
-| 13 | Marker strip | | |
-| 14 | Undo after pull | | |
+| 0 | Pre-flight | ✅ Pass | Required doctor pairing fix (#20 XDG path), pushed to main |
+| 0.5 | Pair reMarkable | ✅ Pass | `ormb pair` worked, config at `~/.config/rmapi/rmapi.conf` |
+| 1 | Plugin install | ✅ Pass | Required build fix (orphaned else) + playbook path fix, pushed to main |
+| 2 | Plugin settings | ✅ Pass | Python bin set to venv path, all checks green |
+| 3 | Happy publish | ✅ Pass | Published to reMarkable Cloud |
+| 4 | Happy pull + consent | ✅ Pass | Annotations appeared. Found #20 (no progress), #24 (notice ~1s) |
+| 5 | Pull idempotent | ✅ Pass | Annotations replaced, not duplicated. Found #25 (no caching, cost controller) |
+| 6 | Republish content-only | ✅ Pass | CLI `--on-exists content-only` works. Found #21 (UX needs plugin command) |
+| 7 | doc_exists | ✅ Pass | Correctly blocks re-publish without content-only |
+| 8 | Cancel consent | ✅ Pass | Publish works without consent (by design — no OpenRouter egress) |
+| 9 | Empty pull | ✅ Pass | Guard fires, annotations preserved. Notice ~1s (#24) |
+| 10 | Concurrent single-flight | ✅ Pass | Second pull blocked while first in progress |
+| 11 | No API key | ✅ Pass | Graceful error |
+| 12 | rmapi not paired | ✅ Pass | `rmapi reset` then doctor shows `paired: false` |
+| 13 | Marker strip | ✅ Pass | Marker blocks stripped from republished PDF |
+| 14 | Undo after pull | ✅ Pass | Ctrl+Z reverses the pull |
 
 ---
 
