@@ -8,6 +8,7 @@
 import { Notice, PluginSettingTab, Setting } from "obsidian";
 import type ObsidianRmBridgePlugin from "./main.ts";
 import type { DoctorResult } from "./types.ts";
+import { NOTICE_OK_TIMEOUT, NOTICE_WARN_TIMEOUT } from "./notice.ts";
 
 export const DEFAULT_SETTINGS = {
   launcher: "python -m obsidian_rm_bridge",
@@ -17,6 +18,9 @@ export const DEFAULT_SETTINGS = {
   visionModel: "",
   automountRoot: "/mnt",
   pullConsentGiven: false,
+  // Default to the proven WSL topology; users on macOS/Linux/native Windows
+  // switch via the dropdown below (or select 'auto' to detect at load).
+  topology: "wsl" as const,
 };
 
 export type OrmbSettingsWithDefaults = typeof DEFAULT_SETTINGS;
@@ -29,9 +33,10 @@ const COPYABLE_COMMANDS: { label: string; command: string }[] = [
 ];
 
 /** Render a DoctorResult as a compact status grid (plain DOM, no secret data). */
-function renderStatusGrid(container: HTMLElement, doc: DoctorResult): void {
+function renderStatusGrid(container: HTMLElement, doc: DoctorResult, topology?: string): void {
   container.empty();
   const rows: [string, string][] = [
+    ["topology", topology || doc.topology || "—"],
     ["ormb version", doc.version || "—"],
     ["schema version", String(doc.schema_version || "—")],
     ["rmapi", doc.rmapi?.found ? `found (${doc.rmapi.version})` : "missing"],
@@ -158,6 +163,27 @@ export class OrmbSettingsTab extends PluginSettingTab {
           });
       });
 
+    // --- Topology ---------------------------------------------------------
+    new Setting(containerEl)
+      .setName("Topology")
+      .setDesc(
+        "How the ormb CLI is launched. 'Auto-detect' picks WSL on Windows when available, otherwise native; the others force a topology.",
+      )
+      .addDropdown((dd) => {
+        dd.addOption("auto", "Auto-detect");
+        dd.addOption("wsl", "WSL (Windows + WSL2)");
+        dd.addOption("mac", "macOS (native)");
+        dd.addOption("linux", "Linux (native)");
+        dd.addOption("win", "Windows (native, no WSL)");
+        dd.setValue(this.plugin.settings.topology);
+        dd.onChange(async (v) => {
+          this.plugin.settings.topology = v as typeof this.plugin.settings.topology;
+          await this.plugin.saveSettings();
+          this.plugin.refreshAdapter();
+          this.display();
+        });
+      });
+
     // --- Test connection --------------------------------------------------
     new Setting(containerEl)
       .setName("Test connection")
@@ -168,14 +194,14 @@ export class OrmbSettingsTab extends PluginSettingTab {
           btn.setDisabled(true);
           try {
             const doc = await this.plugin.adapter.doctor();
-            renderStatusGrid(this.statusHost, doc);
+            renderStatusGrid(this.statusHost, doc, this.plugin.activeTopology);
             if (doc.ok && doc.errors.length === 0) {
-              new Notice("ormb: all checks passed ✓");
+              new Notice("ormb: all checks passed ✓", NOTICE_OK_TIMEOUT);
             } else {
-              new Notice("ormb: some checks failed — see settings.");
+              new Notice("ormb: some checks failed — see settings.", NOTICE_WARN_TIMEOUT);
             }
           } catch (err) {
-            new Notice(`Test connection failed: ${(err as Error).message}`);
+            new Notice(`Test connection failed: ${(err as Error).message}`, NOTICE_WARN_TIMEOUT);
           } finally {
             btn.setButtonText("Test connection");
             btn.setDisabled(false);
@@ -197,9 +223,9 @@ export class OrmbSettingsTab extends PluginSettingTab {
         btn.setButtonText("Copy").onClick(async () => {
           try {
             await navigator.clipboard.writeText(c.command);
-            new Notice(`Copied: ${c.command}`);
+            new Notice(`Copied: ${c.command}`, NOTICE_OK_TIMEOUT);
           } catch {
-            new Notice("Copy failed — select the command manually.");
+            new Notice("Copy failed — select the command manually.", NOTICE_WARN_TIMEOUT);
           }
         });
       });

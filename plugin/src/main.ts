@@ -7,6 +7,7 @@
 
 import { Modal, Notice, Plugin, TFile } from "obsidian";
 import { WslAdapter, type AppRef } from "./wsl-adapter.ts";
+import { NativeAdapter } from "./native-adapter.ts";
 import { VaultBridge, type VaultApp } from "./vault.ts";
 import { buildPullArgs } from "./pull-args.ts";
 import {
@@ -16,22 +17,35 @@ import {
   DEFAULT_VISION_MODEL,
 } from "./marker-block.ts";
 import {
+  buildRepublishBody,
+  noticeTimeout,
+  NOTICE_OK_TIMEOUT,
+  NOTICE_WARN_TIMEOUT,
+} from "./notice.ts";
+import {
   DEFAULT_SETTINGS,
   OrmbSettingsTab,
   type OrmbSettingsWithDefaults,
 } from "./settings.ts";
-import type { OrmbPullData, OrmbResult, PlatformConfig } from "./types.ts";
+import { defaultTopologyContext, detectTopology } from "./topology.ts";
+import type {
+  ExecutionAdapter,
+  OrmbPullData,
+  OrmbResult,
+  PlatformConfig,
+  Topology,
+} from "./types.ts";
 
 const PUBLISH_NOTICE_OK = (msg: string) => `Published ✓ ${msg}`;
 const PULL_NOTICE_OK = (msg: string) => `Pulled ✓ ${msg}`;
 const PUBLISH_BUSY = "Publish to reMarkable already in progress — please wait.";
 const PULL_BUSY = "Pull already in progress — please wait.";
 
-/** Map an OrmbResult code to a user-facing Notice. */
+/** Map an OrmbResult code to a user-facing Notice with an appropriate timeout. */
 function noticeForResult(res: OrmbResult, verb: "Published" | "Pulled" = "Published"): void {
   if (res.ok) {
     const prefix = verb === "Pulled" ? PULL_NOTICE_OK : PUBLISH_NOTICE_OK;
-    new Notice(prefix(res.message));
+    new Notice(prefix(res.message), NOTICE_OK_TIMEOUT);
     return;
   }
   const tips: Record<string, string> = {
@@ -48,19 +62,27 @@ function noticeForResult(res: OrmbResult, verb: "Published" | "Pulled" = "Publis
     rate_limited: "OpenRouter rate limited. Wait and retry.",
     cli_error: `ormb error: ${res.message}`,
   };
-  new Notice(tips[res.code] ?? `ormb error: ${res.message}`);
+  new Notice(tips[res.code] ?? `ormb error: ${res.message}`, noticeTimeout(res));
 }
 
 export default class ObsidianRmBridgePlugin extends Plugin {
   settings!: OrmbSettingsWithDefaults;
-  adapter!: WslAdapter;
+  adapter!: ExecutionAdapter;
   private vaultBridge!: VaultBridge;
   private publishing = false;
+  /** Status bar item showing live CLI progress (rendering, uploading…). */
+  private statusItem!: HTMLElement;
+  /** The resolved (non-'auto') topology currently in use. */
+  activeTopology: Topology = "wsl";
 
   async onload(): Promise<void> {
     await this.loadSettings();
 
-    this.adapter = new WslAdapter(this.platformConfig(), this.app as unknown as AppRef);
+    this.statusItem = this.addStatusBarItem();
+    this.statusItem.setText("");
+
+    this.activeTopology = this.resolveTopology();
+    this.adapter = this.makeAdapter();
     this.vaultBridge = new VaultBridge(
       this.app as unknown as VaultApp,
       this.platformConfig(),
@@ -128,6 +150,7 @@ export default class ObsidianRmBridgePlugin extends Plugin {
       rmFolder: s.rmFolder,
       visionModel: s.visionModel,
       automountRoot: s.automountRoot,
+      topology: s.topology,
     };
   }
 
@@ -143,9 +166,27 @@ export default class ObsidianRmBridgePlugin extends Plugin {
     await this.saveData(this.settings);
   }
 
-  /** Rebuild the adapter after settings change (e.g. pythonBin, distro). */
+  /** Resolve the effective (non-'auto') topology from settings or detection. */
+  private resolveTopology(): Topology {
+    const s = this.settings ?? DEFAULT_SETTINGS;
+    if (s.topology && s.topology !== "auto") return s.topology;
+    return detectTopology(defaultTopologyContext());
+  }
+
+  /** Build the adapter matching the active topology. */
+  private makeAdapter(): ExecutionAdapter {
+    const cfg = this.platformConfig();
+    const appRef = this.app as unknown as AppRef;
+    if (this.activeTopology === "wsl") {
+      return new WslAdapter(cfg, appRef);
+    }
+    return new NativeAdapter(cfg, appRef);
+  }
+
+  /** Rebuild the adapter after settings change (e.g. pythonBin, distro, topology). */
   refreshAdapter(): void {
-    this.adapter = new WslAdapter(this.platformConfig(), this.app as unknown as AppRef);
+    this.activeTopology = this.resolveTopology();
+    this.adapter = this.makeAdapter();
     this.vaultBridge = new VaultBridge(
       this.app as unknown as VaultApp,
       this.platformConfig(),
@@ -155,7 +196,7 @@ export default class ObsidianRmBridgePlugin extends Plugin {
   /** Publish the given note to reMarkable. Single-flight guarded. */
   async publish(file: TFile): Promise<void> {
     if (this.publishing) {
-      new Notice(PUBLISH_BUSY);
+      new Notice(PUBLISH_BUSY, NOTICE_WARN_TIMEOUT);
       return;
     }
 
@@ -164,7 +205,7 @@ export default class ObsidianRmBridgePlugin extends Plugin {
     // on filenames like "foo..bar.md") (grok).
     const segments = file.path.split("/");
     if (!file.path || file.path.includes("\0") || segments.includes("..")) {
-      new Notice("Refusing to publish: invalid note path.");
+      new Notice("Refusing to publish: invalid note path.", NOTICE_WARN_TIMEOUT);
       return;
     }
 
@@ -175,24 +216,45 @@ export default class ObsidianRmBridgePlugin extends Plugin {
     this.publishing = true;
     try {
       const vaultRoot = this.vaultBridge.vaultPathLinux;
-      const args = [
-        "publish",
-        file.path,
-        "--vault",
-        vaultRoot,
-        "--json",
-        "--on-exists",
-        "fail",
-        "--rm-folder",
-        this.settings.rmFolder,
-      ];
-      const res = await this.adapter.spawn(args);
+      const res = await this.runPublish(file, vaultRoot, "fail");
+      if (res.code === "doc_exists" && !res.ok) {
+        const replace = await this.showRepublishModal(file);
+        if (replace) {
+          const res2 = await this.runPublish(file, vaultRoot, "content-only");
+          noticeForResult(res2);
+        }
+        return;
+      }
       noticeForResult(res);
     } catch (err) {
-      new Notice(`Publish failed: ${(err as Error).message}`);
+      new Notice(`Publish failed: ${(err as Error).message}`, NOTICE_WARN_TIMEOUT);
     } finally {
       this.publishing = false;
+      this.statusItem.setText("");
     }
+  }
+
+  /** Spawn the publish command with a given --on-exists mode, surfacing
+   * progress on the status bar. */
+  private async runPublish(
+    file: TFile,
+    vaultRoot: string,
+    onExists: "fail" | "content-only",
+  ): Promise<OrmbResult> {
+    const args = [
+      "publish",
+      file.path,
+      "--vault",
+      vaultRoot,
+      "--json",
+      "--on-exists",
+      onExists,
+      "--rm-folder",
+      this.settings.rmFolder,
+    ];
+    return this.adapter.spawn(args, (line) => {
+      this.statusItem.setText(`ormb: ${line}`);
+    });
   }
 
   /** Run `ormb doctor` and surface warnings. Silent when healthy unless `always`. */
@@ -200,28 +262,28 @@ export default class ObsidianRmBridgePlugin extends Plugin {
     try {
       const doc = await this.adapter.doctor();
       if (!doc.ok || doc.errors.length > 0) {
-        for (const e of doc.errors) new Notice(`ormb doctor: ${e}`);
-        if (!doc.paired) new Notice("reMarkable not paired. Run 'ormb pair' in your WSL terminal.");
-        if (!doc.key_present) new Notice("OpenRouter key not set. Run 'ormb config set-key' in your WSL terminal.");
+        for (const e of doc.errors) new Notice(`ormb doctor: ${e}`, NOTICE_WARN_TIMEOUT);
+        if (!doc.paired) new Notice("reMarkable not paired. Run 'ormb pair' in your WSL terminal.", NOTICE_WARN_TIMEOUT);
+        if (!doc.key_present) new Notice("OpenRouter key not set. Run 'ormb config set-key' in your WSL terminal.", NOTICE_WARN_TIMEOUT);
       } else if (always) {
-        new Notice("ormb: all checks passed ✓");
+        new Notice("ormb: all checks passed ✓", NOTICE_OK_TIMEOUT);
       }
     } catch (err) {
-      if (always) new Notice(`ormb doctor failed: ${(err as Error).message}`);
+      if (always) new Notice(`ormb doctor failed: ${(err as Error).message}`, NOTICE_WARN_TIMEOUT);
     }
   }
 
   /** Pull handwritten annotations from reMarkable into the note. Single-flight guarded. */
   async pullAnnotations(file: TFile): Promise<void> {
     if (this.publishing) {
-      new Notice(PULL_BUSY);
+      new Notice(PULL_BUSY, NOTICE_WARN_TIMEOUT);
       return;
     }
 
     // Path safety (same guard as publish).
     const segments = file.path.split("/");
     if (!file.path || file.path.includes("\0") || segments.includes("..")) {
-      new Notice("Refusing to pull: invalid note path.");
+      new Notice("Refusing to pull: invalid note path.", NOTICE_WARN_TIMEOUT);
       return;
     }
 
@@ -230,9 +292,14 @@ export default class ObsidianRmBridgePlugin extends Plugin {
     // otherwise be overwritten (same rationale as publish).
     await this.saveActiveEditorIfDirty();
 
+    // Best-effort page count via `pull --info` (NO vision, NO OpenRouter cost —
+    // just downloads the PDF and counts pages). Falls back to no count on any
+    // failure so the consent modal still shows (AC-6).
+    const pageCount = await this.fetchPageCount(file);
+
     // First-run consent: OpenRouter egress disclosure. Sticky once given.
     if (!this.settings.pullConsentGiven) {
-      const consent = await this.showPullConsentModal(file);
+      const consent = await this.showPullConsentModal(file, pageCount);
       if (!consent) return;
       this.settings.pullConsentGiven = true;
       await this.saveSettings();
@@ -246,12 +313,13 @@ export default class ObsidianRmBridgePlugin extends Plugin {
       const progressLines: string[] = [];
       const res = await this.adapter.spawn(args, (line) => {
         progressLines.push(line);
+        this.statusItem.setText(`ormb: ${line}`);
       });
       if (res.ok && res.code === "transcribed" && res.data) {
         // Validate that res.data is OrmbPullData, not OrmbPublishData (grok).
         const d = res.data as Record<string, unknown>;
         if (!("sections" in d) || !Array.isArray(d.sections)) {
-          noticeForResult(res);
+          noticeForResult(res, "Pulled");
         } else {
           const pullData = res.data as OrmbPullData;
           // Guard against empty pulls — don't wipe existing annotations if
@@ -260,7 +328,7 @@ export default class ObsidianRmBridgePlugin extends Plugin {
             !pullData.sections || pullData.sections.length === 0 ||
             pullData.annotated_pages === 0
           ) {
-            new Notice("No annotations found — existing annotations preserved.");
+            new Notice("No annotations found — existing annotations preserved.", NOTICE_WARN_TIMEOUT);
           } else {
             const markerBlock = buildMarkerBlock(pullData);
             // Atomic, undo-able write: vault.process reads current content and
@@ -268,21 +336,53 @@ export default class ObsidianRmBridgePlugin extends Plugin {
             await this.app.vault.process(file, (current) =>
               applyMarkerBlock(current, markerBlock, pullData),
             );
-            new Notice(`Pulled ${pullData.annotated_pages} annotation(s) ✓`);
+            new Notice(`Pulled ${pullData.annotated_pages} annotation(s) ✓`, NOTICE_OK_TIMEOUT);
           }
         }
       } else {
         noticeForResult(res, "Pulled");
       }
     } catch (err) {
-      new Notice(`Pull failed: ${(err as Error).message}`);
+      new Notice(`Pull failed: ${(err as Error).message}`, NOTICE_WARN_TIMEOUT);
     } finally {
       this.publishing = false;
+      this.statusItem.setText("");
+    }
+  }
+
+  /**
+   * Best-effort `ormb pull --info <page_name> --json`. Returns the PDF page
+   * count WITHOUT invoking vision (no OpenRouter cost). Returns null on any
+   * failure so the consent modal still shows (AC-6).
+   */
+  private async fetchPageCount(file: TFile): Promise<number | null> {
+    try {
+      const vaultRoot = this.vaultBridge.vaultPathLinux;
+      const args = [
+        "pull",
+        file.basename,
+        "--info",
+        "--vault",
+        vaultRoot,
+        "--rm-folder",
+        this.settings.rmFolder,
+        "--json",
+      ];
+      const res = await this.adapter.spawn(args);
+      if (res.ok && res.data) {
+        const d = res.data as Record<string, unknown>;
+        if (typeof d.total_pages === "number") {
+          return d.total_pages;
+        }
+      }
+      return null;
+    } catch {
+      return null;
     }
   }
 
   /** First-run consent modal for the pull path (OpenRouter egress). */
-  private showPullConsentModal(file: TFile): Promise<boolean> {
+  private showPullConsentModal(file: TFile, pageCount: number | null = null): Promise<boolean> {
     return new Promise((resolve) => {
       const modal = new Modal(this.app);
       modal.titleEl.setText("Pull annotations from reMarkable");
@@ -290,6 +390,7 @@ export default class ObsidianRmBridgePlugin extends Plugin {
       const body = buildConsentBody(
         file.basename,
         this.settings.visionModel || DEFAULT_VISION_MODEL,
+        pageCount,
       );
       content.createEl("p", { text: body });
       content.createEl("p", {
@@ -310,6 +411,45 @@ export default class ObsidianRmBridgePlugin extends Plugin {
       // backdrop click (which call modal.close() without firing either button
       // handler). Treat any non-OK dismissal as a cancellation so the awaited
       // promise never hangs.
+      let resolved = false;
+      const done = (v: boolean): void => {
+        if (resolved) return;
+        resolved = true;
+        resolve(v);
+      };
+      okBtn.onclick = () => {
+        done(true);
+        modal.close();
+      };
+      cancelBtn.onclick = () => {
+        done(false);
+        modal.close();
+      };
+      modal.onClose = () => done(false);
+      modal.open();
+    });
+  }
+
+  /**
+   * Republish confirmation modal (AC-2). Shown when publish returns
+   * `doc_exists`. The default publish uses `--on-exists fail`; the replace is
+   * explicit and preserves reMarkable annotations via `--on-exists
+   * content-only`. Returns true if the user confirms replace.
+   */
+  private showRepublishModal(file: TFile): Promise<boolean> {
+    return new Promise((resolve) => {
+      const modal = new Modal(this.app);
+      modal.titleEl.setText("Document already exists on reMarkable");
+      const content = modal.contentEl;
+      content.createEl("p", { text: buildRepublishBody(file.basename) });
+
+      const btnBar = content.createDiv({ cls: "modal-button-bar" });
+      const cancelBtn = btnBar.createEl("button", { text: "Cancel" });
+      const okBtn = btnBar.createEl("button", {
+        text: "Replace",
+        cls: "mod-warning",
+      });
+
       let resolved = false;
       const done = (v: boolean): void => {
         if (resolved) return;

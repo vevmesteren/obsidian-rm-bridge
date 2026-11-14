@@ -115,45 +115,85 @@ test("stripExistingAnnotations: strips from the first marker to end of file", ()
 // applyMarkerBlock — replace, not duplicate (ARB R4)
 // ---------------------------------------------------------------------------
 
-test("applyMarkerBlock: appends marker + sections with page headers to clean content", () => {
+test("applyMarkerBlock: appends marker + date-titled Annotations section with bullets", () => {
   const content = "# Note";
   const data: OrmbPullData = {
-    sections: [{ page: 1, text: "> first scribble" }],
+    sections: [
+      { page: 1, text: "> first scribble" },
+      { page: 2, text: "second note" },
+    ],
+    doc_id: "note",
+    rev: "cafef00d",
+    total_pages: 2,
+    annotated_pages: 2,
+  };
+  const out = applyMarkerBlock(content, buildMarkerBlock(data), data, "2026-11-13");
+  assert.equal(
+    out,
+    '# Note\n' +
+    '<!-- ormb:annotations doc="note" rev="cafef00d" -->\n' +
+    '## [2026-11-13] Annotations\n\n' +
+    '- > first scribble\n' +
+    '- second note\n',
+  );
+  // Old per-page headers MUST NOT appear.
+  assert.ok(!/## Page \d/.test(out), "no ## Page N headers");
+});
+
+test("applyMarkerBlock: defaults dateStr to today when omitted", () => {
+  const content = "# Note";
+  const data: OrmbPullData = {
+    sections: [{ page: 1, text: "x" }],
     doc_id: "note",
     rev: "cafef00d",
     total_pages: 1,
     annotated_pages: 1,
   };
   const out = applyMarkerBlock(content, buildMarkerBlock(data), data);
-  assert.equal(
-    out,
-    '# Note\n<!-- ormb:annotations doc="note" rev="cafef00d" -->\n## Page 1\n\n> first scribble\n',
-  );
+  const today = new Date().toISOString().slice(0, 10);
+  assert.ok(out.includes(`## [${today}] Annotations`), "uses today's date");
 });
 
 test("applyMarkerBlock: replaces existing marker + sections, does not duplicate", () => {
   const content =
     "# Note\n" +
     '<!-- ormb:annotations doc="note" rev="oldoldol" -->\n' +
-    "## Page 1\n\n> old\n";
+    "## [2025-01-01] Annotations\n\n- old scribble\n";
   const data: OrmbPullData = {
-    sections: [{ page: 2, text: "> new" }],
+    sections: [{ page: 2, text: "new scribble" }],
     doc_id: "note",
     rev: "newnewne",
     total_pages: 2,
     annotated_pages: 1,
   };
-  const out = applyMarkerBlock(content, buildMarkerBlock(data), data);
+  const out = applyMarkerBlock(content, buildMarkerBlock(data), data, "2026-11-13");
   assert.ok(out.includes('rev="newnewne"'), "new rev present");
   assert.ok(!out.includes("oldoldol"), "old rev gone");
-  assert.ok(out.includes("> new"), "new section text present");
-  assert.ok(!out.includes("> old"), "old section text gone");
+  assert.ok(out.includes("- new scribble"), "new section as a bullet");
+  assert.ok(!out.includes("old scribble"), "old section text gone");
+  // New date-titled header present, old one gone.
+  assert.ok(out.includes("## [2026-11-13] Annotations"), "new date header");
+  assert.ok(!out.includes("## [2025-01-01]"), "old date header gone");
   // Only one marker block.
   assert.equal(
     (out.match(/<!-- ormb:annotations/g) || []).length,
     1,
     "exactly one marker block",
   );
+});
+
+test("applyMarkerBlock: empty sections yields header with no bullets", () => {
+  const content = "# Note";
+  const data: OrmbPullData = {
+    sections: [],
+    doc_id: "note",
+    rev: "cafef00d",
+    total_pages: 0,
+    annotated_pages: 0,
+  };
+  const out = applyMarkerBlock(content, buildMarkerBlock(data), data, "2026-11-13");
+  assert.ok(out.includes("## [2026-11-13] Annotations"), "header present");
+  assert.ok(!/- /.test(out.split("Annotations")[1] ?? ""), "no bullets when empty");
 });
 
 // ---------------------------------------------------------------------------
@@ -216,6 +256,18 @@ test("buildConsentBody: mentions file basename, model, and OpenRouter egress", (
 test("buildConsentBody: falls back to CLI default model when blank", () => {
   const text = buildConsentBody("n.md", "");
   assert.ok(/CLI default/i.test(text), "notes CLI default");
+});
+
+test("buildConsentBody: includes page count when pageCount is a number", () => {
+  const text = buildConsentBody("note.md", "z-ai/glm-4.5v", 5);
+  assert.ok(/5 pages? will be sent to OpenRouter/i.test(text), "mentions 5 pages");
+});
+
+test("buildConsentBody: omits page count when pageCount is null (graceful fallback)", () => {
+  const text = buildConsentBody("note.md", "z-ai/glm-4.5v", null);
+  assert.ok(!/pages? will be sent/i.test(text), "no page-count line when null");
+  // Still discloses egress.
+  assert.ok(/OpenRouter/i.test(text), "still discloses OpenRouter egress");
 });
 
 // ---------------------------------------------------------------------------
