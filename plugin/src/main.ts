@@ -302,7 +302,7 @@ export default class ObsidianRmBridgePlugin extends Plugin {
       const btnBar = content.createDiv({ cls: "modal-button-bar" });
       const cancelBtn = btnBar.createEl("button", { text: "Cancel" });
       const okBtn = btnBar.createEl("button", {
-        text: "Pull annotations",
+        text: "Consent & Pull",
         cls: "mod-cta",
       });
 
