@@ -55,14 +55,16 @@ If `ormb doctor --json` shows `paired: false`:
 
 2. Copy plugin files to your Obsidian vault's plugins folder:
    ```powershell
-   # In Windows PowerShell
+   # In Windows PowerShell — adjust $vault to your vault path
    $vault = "C:\dev\veviki"
    $dest = "$vault\.obsidian\plugins\obsidian-rm-bridge"
    New-Item -ItemType Directory -Force -Path $dest
-   Copy-Item "\\wsl$\Ubuntu\home\hermes\obsidian-rm-bridge\plugin\main.js" $dest
-   Copy-Item "\\wsl$\Ubuntu\home\hermes\obsidian-rm-bridge\plugin\manifest.json" $dest
+   Copy-Item "C:\dev\obsidian-rm-bridge\plugin\main.js" $dest
+   Copy-Item "C:\dev\obsidian-rm-bridge\plugin\manifest.json" $dest
    ```
    If `styles.css` exists, copy it too.
+
+   > **Note:** The repo lives on the Windows filesystem (`C:\dev\obsidian-rm-bridge\`), not in WSL home. Build from WSL via `/mnt/c/dev/obsidian-rm-bridge/plugin/`, but copy the built `main.js` from the Windows path.
 
 3. In Obsidian: Settings → Community plugins → reload list → enable "Obsidian reMarkable Bridge"
 
