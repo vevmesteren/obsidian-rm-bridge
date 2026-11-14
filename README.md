@@ -347,8 +347,9 @@ The plugin settings tab lets you:
 
 ### Screenshots
 
-> **Coming soon** — screenshots will be added during the E2E test pass before
-> the community-store submission.
+![Publish command](docs/screenshots/publish.png)
+
+![Pull command](docs/screenshots/pull.png)
 
 ## CLI Reference
 
