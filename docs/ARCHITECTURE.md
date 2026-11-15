@@ -7,7 +7,7 @@
 > **Status:** Phase 5b — Pull annotations + marker blocks shipped. Phase 5c (native adapters + README + community store) in progress.
 > **Author:** vevmesteren
 > **Date:** 2026-11-13
-> **Repo:** [vevmesteren/remarkable-bridge](https://github.com/vevmesteren/remarkable-bridge)
+> **Repo:** [vevmesteren/remarkable-roundtrip](https://github.com/vevmesteren/remarkable-roundtrip)
 
 ---
 

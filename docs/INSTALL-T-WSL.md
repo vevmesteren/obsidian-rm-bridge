@@ -16,7 +16,7 @@
 
 ```bash
 # Clone the repo
-git clone https://github.com/vevmesteren/remarkable-bridge.git
+git clone https://github.com/vevmesteren/remarkable-roundtrip.git
 cd obsidian-rm-bridge
 
 # Create a venv and install
@@ -59,7 +59,7 @@ The script:
 ## 3. Enable in Obsidian
 
 1. Open Obsidian → Settings → Community plugins
-2. Find "reMarkable Bridge" → enable it
+2. Find "reMarkable Roundtrip" → enable it
 3. Open the plugin settings tab → set:
    - **Python binary**: `/mnt/c/dev/obsidian-rm-bridge/.venv/bin/python` (adjust to your repo path)
    - **Topology**: Auto-detect (should resolve to WSL)

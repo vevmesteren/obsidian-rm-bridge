@@ -15,7 +15,7 @@
 ## 1. Install the CLI
 
 ```bash
-git clone https://github.com/vevmesteren/remarkable-bridge.git
+git clone https://github.com/vevmesteren/remarkable-roundtrip.git
 cd obsidian-rm-bridge
 
 python3 -m venv .venv
@@ -48,7 +48,7 @@ Replace the path with your Obsidian vault path.
 
 ## 3. Enable in Obsidian
 
-1. Open Obsidian → Settings → Community plugins → enable "reMarkable Bridge"
+1. Open Obsidian → Settings → Community plugins → enable "reMarkable Roundtrip"
 2. Plugin settings tab:
    - **Python binary**: `/Users/you/obsidian-rm-bridge/.venv/bin/python` (adjust path)
    - **Topology**: Auto-detect (should resolve to macOS)

@@ -70,7 +70,7 @@ If `ormb doctor --json` shows `paired: false`:
 
    > **Note:** The repo lives on the Windows filesystem (`C:\dev\obsidian-rm-bridge\`), not in WSL home. Build from WSL via `/mnt/c/dev/obsidian-rm-bridge/plugin/`, but copy the built `main.js` from the Windows path.
 
-3. In Obsidian: Settings → Community plugins → reload list → enable "reMarkable Bridge"
+3. In Obsidian: Settings → Community plugins → reload list → enable "reMarkable Roundtrip"
 
 **Pass criteria:** Plugin appears in the community plugins list and enables without errors.
 
@@ -78,7 +78,7 @@ If `ormb doctor --json` shows `paired: false`:
 
 ## 2. Plugin settings (Obsidian)
 
-1. Settings → "reMarkable Bridge" tab
+1. Settings → "reMarkable Roundtrip" tab
 2. Verify defaults match your environment:
 
    | Field | Expected value |

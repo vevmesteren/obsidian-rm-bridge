@@ -6,7 +6,7 @@
 
 | Term | Definition |
 |------|-----------|
-| **ormb** | The CLI for obsidian-rm-bridge. Short for "reMarkable Bridge." |
+| **ormb** | The CLI for obsidian-rm-bridge. Short for "reMarkable Roundtrip." |
 | **rmapi** | A third-party Go binary ([ddvk/rmapi](https://github.com/ddvk/rmapi)) that communicates with the reMarkable Cloud API. Used for uploading PDFs and downloading annotated documents. |
 | **Playwright** | A browser automation library (by Microsoft) that drives Chromium. obsidian-rm-bridge uses it to render markdown → PDF (including mermaid diagrams) without a GUI. |
 | **OpenRouter** | An API aggregator for LLMs. obsidian-rm-bridge uses it to access vision-capable models (like GLM-4.5V) for handwriting transcription. |

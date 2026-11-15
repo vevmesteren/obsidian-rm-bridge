@@ -37,7 +37,7 @@ flowchart LR
 > End users: `pip install -e .` is sufficient.
 
 ```bash
-git clone https://github.com/vevmesteren/remarkable-bridge.git
+git clone https://github.com/vevmesteren/remarkable-roundtrip.git
 cd obsidian-rm-bridge
 
 # Use a venv (avoids system Python permission issues)
@@ -267,7 +267,7 @@ Once accepted into the community plugin store, you can install it directly
 from Obsidian:
 
 1. **Settings → Community plugins → Browse** and search for
-   "reMarkable Bridge".
+   "reMarkable Roundtrip".
 2. Click **Install**, then **Enable**.
 
 Until then, install from source with the install script:
@@ -293,7 +293,7 @@ For step-by-step per-topology instructions, see:
 
 After installing:
 
-1. In Obsidian: **Settings → Community plugins** → enable "reMarkable Bridge"
+1. In Obsidian: **Settings → Community plugins** → enable "reMarkable Roundtrip"
 2. Open the plugin settings tab → set the **Python binary** path
 3. Click **Test connection** — all checks should pass
 
