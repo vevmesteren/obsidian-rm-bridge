@@ -47,13 +47,13 @@ function renderStatusGrid(container: HTMLElement, doc: DoctorResult, topology?: 
     ["api key present", doc.key_present ? "yes" : "no"],
   ];
   for (const [k, v] of rows) {
-    const row = container.createEl("div", { cls: "ormb-status-row" });
-    row.createEl("span", { text: k, cls: "ormb-status-key" });
-    row.createEl("span", { text: v, cls: "ormb-status-val" });
+    const row = container.createDiv({ cls: "ormb-status-row" });
+    row.createSpan({ text: k, cls: "ormb-status-key" });
+    row.createSpan({ text: v, cls: "ormb-status-val" });
   }
   if (doc.errors.length > 0) {
-    const errs = container.createEl("div", { cls: "ormb-status-errors" });
-    for (const e of doc.errors) errs.createEl("div", { text: `• ${e}` });
+    const errs = container.createDiv({ cls: "ormb-status-errors" });
+    for (const e of doc.errors) errs.createDiv({ text: `• ${e}` });
   }
 }
 
@@ -205,7 +205,7 @@ export class OrmbSettingsTab extends PluginSettingTab {
         });
       });
 
-    this.statusHost = containerEl.createEl("div", { cls: "ormb-status-grid" });
+    this.statusHost = containerEl.createDiv({ cls: "ormb-status-grid" });
 
     // --- Copyable terminal commands --------------------------------------
     new Setting(containerEl).setName("Terminal setup commands").setHeading();

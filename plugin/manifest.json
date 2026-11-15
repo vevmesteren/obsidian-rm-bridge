@@ -1,7 +1,7 @@
 {
   "id": "rm-bridge",
   "name": "reMarkable Roundtrip",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "minAppVersion": "1.5.0",
   "author": "vevmesteren",
   "description": "Publish notes to reMarkable as PDFs, annotate by hand, and pull handwritten annotations back into your vault as structured text.",
