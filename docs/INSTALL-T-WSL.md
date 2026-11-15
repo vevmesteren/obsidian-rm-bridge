@@ -59,7 +59,7 @@ The script:
 ## 3. Enable in Obsidian
 
 1. Open Obsidian → Settings → Community plugins
-2. Find "Obsidian reMarkable Bridge" → enable it
+2. Find "reMarkable Bridge" → enable it
 3. Open the plugin settings tab → set:
    - **Python binary**: `/mnt/c/dev/obsidian-rm-bridge/.venv/bin/python` (adjust to your repo path)
    - **Topology**: Auto-detect (should resolve to WSL)

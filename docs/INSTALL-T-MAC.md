@@ -48,7 +48,7 @@ Replace the path with your Obsidian vault path.
 
 ## 3. Enable in Obsidian
 
-1. Open Obsidian → Settings → Community plugins → enable "Obsidian reMarkable Bridge"
+1. Open Obsidian → Settings → Community plugins → enable "reMarkable Bridge"
 2. Plugin settings tab:
    - **Python binary**: `/Users/you/obsidian-rm-bridge/.venv/bin/python` (adjust path)
    - **Topology**: Auto-detect (should resolve to macOS)

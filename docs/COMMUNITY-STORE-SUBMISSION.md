@@ -4,7 +4,7 @@
 
 ← Back to [README](../README.md)
 
-Checklist and process for submitting the **Obsidian reMarkable Bridge** plugin
+Checklist and process for submitting the **reMarkable Bridge** plugin
 to the [Obsidian community plugin store](https://obsidian.md/plugins).
 
 This document is for the **operator** (repo maintainer). The worker does not
@@ -18,7 +18,7 @@ Verified against `plugin/manifest.json`:
 
 - [x] `id`: `"rm-bridge"` (unique, lowercase, kebab-case, matches
   the plugin folder name and the `community-plugins.json` entry)
-- [x] `name`: `"Obsidian reMarkable Bridge"` (human-readable)
+- [x] `name`: `"reMarkable Bridge"` (human-readable)
 - [x] `version`: `"0.1.0"` (matches `plugin/versions.json` key)
 - [x] `minAppVersion`: `"1.5.0"` (matches `plugin/versions.json` value)
 - [x] `author`: `"vevmesteren"` (GitHub username, matches repo owner)
@@ -133,7 +133,7 @@ cd release
    ```json
    {
      "id": "rm-bridge",
-     "name": "Obsidian reMarkable Bridge",
+     "name": "reMarkable Bridge",
      "author": "vevmesteren",
      "description": "Publish notes to reMarkable and pull back handwritten annotations",
      "repo": "vevmesteren/remarkable-bridge"

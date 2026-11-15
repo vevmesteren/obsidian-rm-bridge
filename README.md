@@ -267,7 +267,7 @@ Once accepted into the community plugin store, you can install it directly
 from Obsidian:
 
 1. **Settings → Community plugins → Browse** and search for
-   "Obsidian reMarkable Bridge".
+   "reMarkable Bridge".
 2. Click **Install**, then **Enable**.
 
 Until then, install from source with the install script:
@@ -293,7 +293,7 @@ For step-by-step per-topology instructions, see:
 
 After installing:
 
-1. In Obsidian: **Settings → Community plugins** → enable "Obsidian reMarkable Bridge"
+1. In Obsidian: **Settings → Community plugins** → enable "reMarkable Bridge"
 2. Open the plugin settings tab → set the **Python binary** path
 3. Click **Test connection** — all checks should pass
 

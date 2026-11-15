@@ -65,7 +65,7 @@ Copy-Item manifest.json $dest
 
 ## 3. Enable in Obsidian
 
-1. Open Obsidian → Settings → Community plugins → enable "Obsidian reMarkable Bridge"
+1. Open Obsidian → Settings → Community plugins → enable "reMarkable Bridge"
 2. Plugin settings tab:
    - **Python binary**: `C:\dev\obsidian-rm-bridge\.venv\Scripts\python.exe`
    - **Topology**: Auto-detect (should resolve to Windows native)
