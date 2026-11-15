@@ -130,7 +130,7 @@ export class OrmbSettingsTab extends PluginSettingTab {
 
     // --- visionModel ------------------------------------------------------
     new Setting(containerEl)
-      .setName("Vision model")
+      .setName("Vision Model")
       .setDesc("OpenRouter vision model slug for annotation transcription (pull). Leave empty for the CLI default.")
       .addText((t) => {
         t.setValue(this.plugin.settings.visionModel);
@@ -226,5 +226,50 @@ export class OrmbSettingsTab extends PluginSettingTab {
         });
       });
     }
+  }
+
+  getSettingDefinitions() {
+    const tab = this;
+    return [
+      { name: "Setup", desc: "The plugin wraps the ormb CLI in WSL. No API key is stored here — it lives in the CLI's 0600 config inside your WSL home." },
+
+      { name: "Launcher", desc: "How the ormb CLI is invoked.", control: { type: "dropdown" as const, key: "launcher", options: { "python -m obsidian_rm_bridge": "python -m obsidian_rm_bridge", "ormb": "ormb" } } },
+
+      { name: "WSL distribution", desc: "WSL distro name passed to wsl.exe --distribution. Leave empty for the default distro.", render: (s: Setting) => {
+        s.addText((t) => { t.setValue(tab.plugin.settings.distro); t.onChange(async (v) => { tab.plugin.settings.distro = v.trim(); await tab.plugin.saveSettings(); tab.plugin.refreshAdapter(); }); });
+      } },
+
+      { name: "Python binary", desc: "Absolute path to the python interpreter inside WSL, e.g. /home/u/.venvs/ormb/bin/python.", render: (s: Setting) => {
+        s.addText((t) => { t.setValue(tab.plugin.settings.pythonBin); t.onChange(async (v) => { tab.plugin.settings.pythonBin = v.trim(); await tab.plugin.saveSettings(); tab.plugin.refreshAdapter(); }); });
+      } },
+
+      { name: "reMarkable folder", desc: "Destination folder on reMarkable. Free text (allowlist validated by the CLI).", control: { type: "text" as const, key: "rmFolder" } },
+
+      { name: "Vision Model", desc: "OpenRouter vision model slug for annotation transcription (pull). Leave empty for the CLI default.", render: (s: Setting) => {
+        s.addText((t) => { t.setValue(tab.plugin.settings.visionModel); t.onChange(async (v) => { tab.plugin.settings.visionModel = v.trim(); await tab.plugin.saveSettings(); tab.plugin.refreshAdapter(); }); });
+      } },
+
+      { name: "Pull annotation consent", desc: "Consent for sending page images to OpenRouter for transcription.", render: (s: Setting) => {
+        s.addButton((btn) => { btn.setButtonText(tab.plugin.settings.pullConsentGiven ? "Revoke consent" : "Give consent").onClick(async () => { tab.plugin.settings.pullConsentGiven = !tab.plugin.settings.pullConsentGiven; await tab.plugin.saveSettings(); tab.update(); }); });
+      } },
+
+      { name: "Topology", desc: "How the ormb CLI is launched. 'Auto-detect' picks WSL on Windows when available, otherwise native; the others force a topology.", render: (s: Setting) => {
+        s.addDropdown((dd) => { dd.addOption("auto", "Auto-detect"); dd.addOption("wsl", "WSL (Windows + WSL2)"); dd.addOption("mac", "macOS (native)"); dd.addOption("linux", "Linux (native)"); dd.addOption("win", "Windows (native, no WSL)"); dd.setValue(tab.plugin.settings.topology); dd.onChange(async (v) => { tab.plugin.settings.topology = v as typeof tab.plugin.settings.topology; await tab.plugin.saveSettings(); tab.plugin.refreshAdapter(); tab.update(); }); });
+      } },
+
+      { name: "Test connection", desc: "Run `ormb doctor` and render the status grid.", render: (s: Setting) => {
+        s.addButton((btn) => { btn.setButtonText("Test connection").onClick(async () => { btn.setButtonText("Testing…"); btn.setDisabled(true); try { const doc = await tab.plugin.adapter.doctor(); renderStatusGrid(tab.statusHost, doc, tab.plugin.activeTopology); if (doc.ok && doc.errors.length === 0) { new Notice("ormb: all checks passed ✓", NOTICE_OK_TIMEOUT); } else { new Notice("ormb: some checks failed — see settings.", NOTICE_WARN_TIMEOUT); } } catch (err) { new Notice(`Test connection failed: ${(err as Error).message}`, NOTICE_WARN_TIMEOUT); } finally { btn.setButtonText("Test connection"); btn.setDisabled(false); } }); });
+      } },
+
+      { name: "Terminal setup commands", desc: "Run these in your WSL terminal. The plugin cannot perform these (they need a TTY / sudo)." },
+
+      ...COPYABLE_COMMANDS.map((c) => ({
+        name: c.label,
+        desc: c.command,
+        render: (s: Setting) => {
+          s.addButton((btn) => { btn.setButtonText("Copy").onClick(async () => { try { await navigator.clipboard.writeText(c.command); new Notice(`Copied: ${c.command}`, NOTICE_OK_TIMEOUT); } catch { new Notice("Copy failed — select the command manually.", NOTICE_WARN_TIMEOUT); } }); });
+        },
+      })),
+    ];
   }
 }

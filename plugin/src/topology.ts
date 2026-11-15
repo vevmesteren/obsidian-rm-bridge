@@ -1,11 +1,10 @@
 // Platform topology detection (Phase 5c, AC-5).
 //
 // Selects which ExecutionAdapter the plugin uses. The detection is best-effort
-// and overridable via the settings dropdown. The WSL check looks for wsl.exe
-// or the WSL_DISTRO_NAME env var; on any failure it defaults to 'win' on
-// Windows (the native Windows topology, no WSL).
+// and overridable via the settings dropdown. The WSL check looks for the
+// WSL_DISTRO_NAME env var; on any failure it defaults to 'win' on Windows
+// (the native Windows topology, no WSL).
 
-import { existsSync } from "fs";
 import type { Topology } from "./types.ts";
 
 /** Injectable context so detectTopology is unit-testable without monkey-patching globals. */
@@ -40,10 +39,9 @@ export function detectTopology(ctx: TopologyContext): Topology {
 /** True if WSL appears to be installed/available on this Windows host. */
 function wslAvailable(): boolean {
   try {
-    // WSL_DISTRO_NAME is set inside a WSL session, but Obsidian runs on the
-    // Windows host; check for wsl.exe on SystemRoot instead.
-    const systemRoot = process.env.SystemRoot ?? "C:\\Windows";
-    if (existsSync(`${systemRoot}\\System32\\wsl.exe`)) return true;
+    // WSL_DISTRO_NAME is set inside a WSL session. On the Windows host,
+    // users can set topology to 'wsl' manually in settings if auto-detect
+    // doesn't pick it up.
     if (typeof process.env.WSL_DISTRO_NAME === "string" && process.env.WSL_DISTRO_NAME !== "") {
       return true;
     }

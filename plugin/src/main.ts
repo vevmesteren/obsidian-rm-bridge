@@ -5,7 +5,7 @@
 // inside WSL home. Every CLI invocation goes through an ExecutionAdapter that
 // launches `wsl.exe --exec` with argv only — never a shell.
 
-import { Modal, Notice, Plugin, TFile } from "obsidian";
+import { Modal, Notice, Plugin, TFile, createEl } from "obsidian";
 import { WslAdapter, type AppRef } from "./wsl-adapter.ts";
 import { NativeAdapter } from "./native-adapter.ts";
 import { VaultBridge, type VaultApp } from "./vault.ts";
@@ -393,20 +393,22 @@ export default class ObsidianRmBridgePlugin extends Plugin {
         this.settings.visionModel || DEFAULT_VISION_MODEL,
         pageCount,
       );
-      content.createEl("p", { text: body });
-      content.createEl("p", {
+      content.appendChild(createEl("p", { text: body }));
+      content.appendChild(createEl("p", {
         text:
           "This is disclosed and consented to on first pull. " +
           "You can revoke by clearing the consent toggle in settings.",
         cls: "setting-item-description",
-      });
+      }));
 
       const btnBar = content.createDiv({ cls: "modal-button-bar" });
-      const cancelBtn = btnBar.createEl("button", { text: "Cancel" });
-      const okBtn = btnBar.createEl("button", {
+      const cancelBtn = createEl("button", { text: "Cancel" });
+      btnBar.appendChild(cancelBtn);
+      const okBtn = createEl("button", {
         text: "Consent & Pull",
         cls: "mod-cta",
       });
+      btnBar.appendChild(okBtn);
 
       // Resolve exactly once: Obsidian modals can be dismissed via Escape or
       // backdrop click (which call modal.close() without firing either button
@@ -442,14 +444,16 @@ export default class ObsidianRmBridgePlugin extends Plugin {
       const modal = new Modal(this.app);
       modal.titleEl.setText("Document already exists on reMarkable");
       const content = modal.contentEl;
-      content.createEl("p", { text: buildRepublishBody(file.basename) });
+      content.appendChild(createEl("p", { text: buildRepublishBody(file.basename) }));
 
       const btnBar = content.createDiv({ cls: "modal-button-bar" });
-      const cancelBtn = btnBar.createEl("button", { text: "Cancel" });
-      const okBtn = btnBar.createEl("button", {
+      const cancelBtn = createEl("button", { text: "Cancel" });
+      btnBar.appendChild(cancelBtn);
+      const okBtn = createEl("button", {
         text: "Replace",
         cls: "mod-warning",
       });
+      btnBar.appendChild(okBtn);
 
       let resolved = false;
       const done = (v: boolean): void => {

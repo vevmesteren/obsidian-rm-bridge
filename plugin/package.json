@@ -1,6 +1,6 @@
 {
   "name": "remarkable-roundtrip-plugin",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Obsidian plugin that bridges notes to reMarkable via the ormb CLI.",
   "private": true,
   "type": "module",
