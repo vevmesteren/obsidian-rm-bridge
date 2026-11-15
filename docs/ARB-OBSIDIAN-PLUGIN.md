@@ -1,5 +1,9 @@
 # ARB — Obsidian Plugin for reMarkable Bridge
 
+> **Audience:** Developers and architects (historical design record)
+
+← Back to [README](../README.md)
+
 > Architecture Review Brief — Synthesized Target Architecture
 > Stage 1A (deepseek-v4-pro) + Stage 1B (minimax-m3.1-flash) + Stage 1C (grok-4.6) + Stage 2 (Fusion panel)
 > Date: 2026-11-13
@@ -422,7 +426,7 @@ Standardized error codes:
 ```json
 {
   "ok": true,
-  "version": "0.1.1",
+  "version": "0.1.0",
   "schema_version": 1,
   "rmapi": {
     "path": "/home/user/.local/bin/rmapi",
@@ -449,7 +453,7 @@ Standardized error codes:
   "code": "transcribed",
   "data": {
     "sections": [
-      {"page": 1, "text": "## Annotations from reMarkable — 2026-11-13\n\n- Note 1\n"},
+      {"page": 1, "text": "## [2026-11-13] Annotations\n\n- Note 1\n"},
       {"page": 3, "text": "### Page 3 notes\n\n- Note on page 3\n"}
     ],
     "doc_id": "abc123",

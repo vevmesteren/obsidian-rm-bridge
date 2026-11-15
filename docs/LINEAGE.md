@@ -1,6 +1,6 @@
 # Lineage
 
-[LINEAGE_COMPLETE]
+> **Status:** Phases 1–5b shipped. Phase 5c (native adapters + README + community store) in progress.
 
 ## Origin
 
@@ -14,7 +14,7 @@
 | 2 | 2026-11-12 | `retrieve.py` — annotation round-trip via GLM-4.5V | ✅ PoC proven |
 | 3 | 2026-11-12 | Polish: tests, CSS, folder publish, re-upload handling | ✅ Done |
 | 4 | 2026-11-12 | Open source extraction (this repo) | ✅ Done — [PR #2](https://github.com/vevmesteren/obsidian-rm-bridge/pull/2), E2E verified on WSL |
-| 5 | 2026-11-13 | Obsidian TypeScript plugin (thin CLI wrapper) | 🔄 In progress — [ARB](docs/ARB-OBSIDIAN-PLUGIN.md) synthesized, 5a-0 + 5a shipped, 5b next |
+| 5 | 2026-11-13 | Obsidian TypeScript plugin (thin CLI wrapper) | 🔄 In progress — [ARB](ARB-OBSIDIAN-PLUGIN.md) synthesized, 5a-0 + 5a + 5b shipped, 5c in progress |
 
 ## Source Files
 
@@ -38,7 +38,7 @@ The original skill code lives at:
 
 ## Phase 5 — Obsidian Plugin (ARB-Driven)
 
-**ARB:** [`docs/ARB-OBSIDIAN-PLUGIN.md`](docs/ARB-OBSIDIAN-PLUGIN.md) — Synthesized target architecture (5-stage ARB pipeline,completed 2026-11-13)
+**ARB:** [`ARB-OBSIDIAN-PLUGIN.md`](ARB-OBSIDIAN-PLUGIN.md) — Synthesized target architecture (5-stage ARB pipeline, completed 2026-11-13)
 
 **Delivery plan (from ARB):**
 
@@ -47,11 +47,13 @@ The original skill code lives at:
 | 5a-0 | CLI contract changes (~150-250 LOC Python) | ✅ Done — [PR #8](https://github.com/vevmesteren/obsidian-rm-bridge/pull/8), 147 tests |
 | 5a | Plugin scaffold + publish command (T-WSL) | ✅ Done — [PR #10](https://github.com/vevmesteren/obsidian-rm-bridge/pull/10), 988 TS LOC, 16 tests |
 | 5b | Pull command + marker blocks | ✅ Done — [PR #17](https://github.com/vevmesteren/obsidian-rm-bridge/pull/17), 32 TS + 153 Python tests |
-| 5c | Native adapters + README + community store submission | Planned |
+| 5c | Native adapters + README + community store submission | 🔄 In progress |
 | 5d/v2 | PyPI release, Electron render spike | Deferred |
 
-**Launch posture:** T-WSL is the primary topology for v1 launch. E2E verification on T-WSL is pending operator testing. T-MAC, T-LINUX, and T-WIN are community-tested via Reddit outreach + PRs.
+**Launch posture:** T-WSL is the primary topology for v1 launch. E2E verification on T-WSL is pending operator testing. T-MAC, T-LINUX, and T-WIN are untested — seeking community testers via Reddit outreach + PRs.
 
 ## Original Plan Document
 
 See `veviki-valentin/concepts/research/veviki-remarkable-bridge/veviki-remarkable-bridge-plan.md` for the original 5-phase plan.
+
+← Back to [README](../README.md)

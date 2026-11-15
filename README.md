@@ -4,19 +4,37 @@
 
 The only reMarkable ↔ Obsidian tool that does the **full round-trip**.
 
+> **⚠️ Pre-release (not yet in the community store):** Installing this plugin
+> currently requires command-line (terminal) experience. A one-click install
+> from Obsidian's community plugin browser will be available after store
+> acceptance. If you're not comfortable with a terminal, check back after
+> the store listing is live.
+
+> **Data egress:** Publishing sends your PDF to reMarkable Cloud. Pulling
+> sends page images to OpenRouter for handwriting transcription. See
+> [Security & Data Egress Disclosures](#security--data-egress-disclosures).
+
 ## How It Works
 
-```
-Obsidian .md  →  PDF (with mermaid diagrams)  →  reMarkable
-                                                    ↓
-                                              annotate by hand
-                                                    ↓
-Obsidian .md  ←  transcribed text (vision LLM)  ←  reMarkable
+```mermaid
+flowchart LR
+    A["Obsidian note\n(.md)"] -->|ormb publish| B["PDF render\n(Playwright)"]
+    B --> C["reMarkable Cloud\n(rmapi upload)"]
+    C --> D["reMarkable tablet\n(annotate by hand)"]
+    D --> E["reMarkable Cloud\n(sync annotated PDF)"]
+    E -->|ormb pull| F["PNG @ 300 DPI\n(pymupdf)"]
+    F --> G["OpenRouter\n(vision LLM)"]
+    G --> H["Transcribed text"]
+    H --> I["Obsidian note\n(annotations appended)"]
+    I -.->|ormb publish\n--on-exists content-only| B
 ```
 
 ## Quick Start
 
 ### Install from source (recommended until PyPI release)
+
+> **Developers:** use `pip install -e ".[dev]"` to include test dependencies.
+> End users: `pip install -e .` is sufficient.
 
 ```bash
 git clone https://github.com/vevmesteren/obsidian-rm-bridge.git
@@ -65,8 +83,9 @@ That's it — your page is on your reMarkable, ready to annotate.
 Annotation transcription uses a vision LLM via [OpenRouter](https://openrouter.ai). You'll need an OpenRouter account and API key.
 
 ```bash
-# Set your API key
-ormb config set openrouter_api_key sk-or-v1-your-key-here
+# Set your API key (interactive — key not stored in shell history)
+ormb config set-key
+# You'll be prompted to paste your key. Stored in ~/.obsidian-rm-bridge/config.toml (0600).
 
 # List what's on your reMarkable to find the page name
 ormb ls
@@ -80,16 +99,25 @@ ormb pull c4-system-landscape --md concepts/architecture/c4-system-landscape.md
 
 # Or pull all annotated pages from your reMarkable folder:
 ormb pull --all
+
+# Get the page count WITHOUT calling vision (for cost checking):
+ormb pull my-page --info --json
 ```
 
-Annotations are appended as:
+Annotations are appended as a single date-titled section with one bullet per
+annotation:
 
 ```markdown
-## Annotations from reMarkable — 2026-11-12
+## [2026-11-13] Annotations
 
-**Page 1:**
-> your handwritten notes transcribed here
+- handwritten annotation text
+- another annotation
 ```
+
+> **Caching:** re-pulling an unchanged document hits a local cache (keyed by
+> the PDF content hash) and skips the paid vision pipeline. If the
+> annotations change, the PDF hash changes and the cache misses, so it
+> re-transcribes.
 
 ## Installation
 
@@ -98,7 +126,11 @@ Annotations are appended as:
 | Dependency | Mac | Windows | Linux |
 |------------|-----|---------|-------|
 | Python 3.10+ | `brew install python` | [python.org](https://python.org) | `apt install python3 python3-pip` |
+| git | `brew install git` | [git-scm.com](https://git-scm.com) | `apt install git` |
+| Node.js 18+ (plugin build only) | `brew install node` | [nodejs.org](https://nodejs.org) | `apt install nodejs npm` |
 | rmapi | `ormb setup --rmapi` | Same | Same |
+| reMarkable account | [remarkable.com](https://remarkable.com) | Same | Same |
+| OpenRouter API key (pull only) | [openrouter.ai](https://openrouter.ai) | Same | Same |
 
 ### macOS
 
@@ -135,6 +167,190 @@ ormb setup          # installs Chromium + system libs (libgbm, libnss, etc.)
                     # runs `sudo playwright install-deps` automatically
 ```
 
+## Topologies
+
+The bridge has been validated across four host/topology combinations. Pick
+the one that matches where Obsidian runs.
+
+| Topology | Obsidian on | CLI / venv / rmapi | Status |
+|----------|------------|-------------------|-------|
+| T-WSL | Windows | WSL2 Ubuntu | Primary, E2E-tested |
+| T-MAC | macOS | Native venv | Untested — seeking community testers |
+| T-LINUX | Linux desktop | Native venv + rmapi | Untested — seeking community testers |
+| T-WIN | Windows | Native Windows Python | Untested — seeking community testers |
+
+### Which topology should I use?
+
+```mermaid
+flowchart TD
+    Start["What OS is Obsidian running on?"] --> Q1{"Windows?"}
+    Q1 -->|Yes| Q2{"Comfortable with\nWSL2?"}
+    Q1 -->|No| Q3{"macOS?"}
+    Q1 -->|No| Q4{"Linux?"}
+    Q2 -->|Yes| TWSL["T-WSL\n(Primary, E2E-tested)\nINSTALL-T-WSL.md"]
+    Q2 -->|No| TWIN["T-WIN\n(Windows native Python)\nINSTALL-T-WIN.md"]
+    Q3 -->|Yes| TMAC["T-MAC\nINSTALL-T-MAC.md"]
+    Q4 -->|Yes| TLINUX["T-LINUX\nINSTALL-T-LINUX.md"]
+```
+
+### T-WSL — Windows + WSL2 Ubuntu (primary)
+
+Obsidian runs on Windows; the CLI, venv, and rmapi live inside a WSL2 Ubuntu
+distribution. This is the primary, end-to-end-tested topology.
+
+```powershell
+# Windows side
+wsl --install -d Ubuntu
+# Inside WSL Ubuntu:
+sudo apt install python3 python3-pip python3-venv python3.10-venv
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e .
+ormb setup --rmapi
+ormb setup
+ormb pair
+ormb config set vault.path /mnt/c/Users/<you>/Documents/Obsidian
+```
+
+The vault path points at the Windows filesystem mounted under `/mnt/c`.
+
+### T-MAC — macOS native
+
+Obsidian and the CLI both run natively on macOS.
+
+```bash
+brew install python
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e .
+ormb setup --rmapi
+ormb pair
+ormb config set vault.path ~/Documents/Obsidian
+```
+
+### T-LINUX — Linux desktop native
+
+Obsidian and the CLI both run on a Linux desktop.
+
+```bash
+sudo apt install python3 python3-pip python3-venv python3.10-venv
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e .
+ormb setup --rmapi
+ormb setup
+ormb pair
+ormb config set vault.path ~/Documents/Obsidian
+```
+
+### T-WIN — Windows native Python
+
+The CLI runs under native Windows Python (no WSL). Obsidian runs on Windows.
+
+```powershell
+python -m venv .venv
+.venv\Scripts\activate
+pip install -e .
+ormb setup --rmapi
+ormb config set vault.path C:\Users\<you>\Documents\Obsidian
+```
+
+> Playwright Chromium on native Windows generally does not need the
+> `install-deps` step (that's Linux-only).
+
+## Obsidian Plugin
+
+The companion Obsidian plugin is a thin TypeScript wrapper that spawns the
+`ormb` CLI via `child_process`. It adds **Publish** and **Pull** commands to
+Obsidian's command palette and a settings tab.
+
+### Install
+
+Once accepted into the community plugin store, you can install it directly
+from Obsidian:
+
+1. **Settings → Community plugins → Browse** and search for
+   "Obsidian reMarkable Bridge".
+2. Click **Install**, then **Enable**.
+
+Until then, install from source with the install script:
+
+```bash
+# From the repo root — builds the plugin and copies it to your vault
+./scripts/install-plugin.sh <vault-path>
+# e.g. ./scripts/install-plugin.sh /mnt/c/dev/veviki
+# e.g. ./scripts/install-plugin.sh ~/Documents/Obsidian
+# e.g. ./scripts/install-plugin.sh 'C:\dev\MyVault'
+```
+
+The script runs `npm run build` and copies `main.js` + `manifest.json` into
+`<vault>/.obsidian/plugins/obsidian-rm-bridge/`. It handles WSL paths
+(`/mnt/c/...`) and Windows paths (`C:\...`) automatically.
+
+For step-by-step per-topology instructions, see:
+
+- **[T-WSL](docs/INSTALL-T-WSL.md)** — Obsidian on Windows, CLI in WSL2 (primary)
+- **[T-MAC](docs/INSTALL-T-MAC.md)** — Obsidian on macOS, native CLI
+- **[T-LINUX](docs/INSTALL-T-LINUX.md)** — Obsidian on Linux, native CLI
+- **[T-WIN](docs/INSTALL-T-WIN.md)** — Obsidian on Windows, native CLI (no WSL)
+
+After installing:
+
+1. In Obsidian: **Settings → Community plugins** → enable "Obsidian reMarkable Bridge"
+2. Open the plugin settings tab → set the **Python binary** path
+3. Click **Test connection** — all checks should pass
+
+### Usage
+
+The plugin adds two commands to the command palette (`Ctrl/Cmd+P`):
+
+- **Publish current note to reMarkable** — renders the active note to PDF and
+  uploads it. Assigns the document the note's stem as its name.
+- **Pull annotations from reMarkable** — downloads the annotated PDF for the
+  current note's name, shows a **consent modal** with the page count that will
+  be sent to OpenRouter, and (after consent) transcribes the handwriting back
+  into the note as a date-titled annotation section.
+
+The first pull triggers a **consent dialog** because page images are sent to
+OpenRouter for vision transcription. The plugin shows the page count (via
+`ormb pull --info`) before you consent to the cost.
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant P as Obsidian Plugin
+    participant C as ormb CLI
+    participant R as reMarkable Cloud
+    participant V as OpenRouter
+    U->>P: "Pull annotations" (command palette)
+    P->>C: ormb pull --info --json (page count only)
+    C->>R: rmapi refresh + geta (metadata)
+    C-->>P: { pages: N, annotated: M }
+    P->>U: Consent modal: "Transcribe M pages via GLM-4.5V on OpenRouter?"
+    U->>P: Confirm
+    P->>C: ormb pull --emit json (full pull)
+    C->>R: rmapi geta (annotated PDF)
+    C->>C: PDF to PNG @ 300 DPI
+    C->>V: POST page images
+    V-->>C: Transcribed text per page
+    C-->>P: { sections: [...], doc_id }
+    P->>P: vault.process (replace marker block)
+    P-->>U: "Pulled M annotations"
+```
+
+### Settings tab
+
+The plugin settings tab lets you:
+
+- **Test connection** — verifies `ormb` is on PATH and reports the doctor
+  health check.
+- Run the **terminal setup commands** (`ormb setup --rmapi`, `ormb pair`,
+  `ormb config set-key`) with copy-to-clipboard buttons so you can run them
+  in a real terminal (the plugin does not capture your API key).
+
+### Screenshots
+
+![Publish command](docs/screenshots/publish.png)
+
+![Pull command](docs/screenshots/pull.png)
+
 ## CLI Reference
 
 | Command | Description |
@@ -143,18 +359,24 @@ ormb setup          # installs Chromium + system libs (libgbm, libnss, etc.)
 | `ormb publish <folder> --folder` | Publish all .md files as a combined PDF |
 | `ormb pull <page-name>` | Pull annotations from reMarkable (page-name = .md stem, e.g. `c4-system-landscape`) |
 | `ormb pull <page-name> --md <path>` | Same, but specify the source .md file (for subdirectory notes) |
+| `ormb pull <page-name> --info --json` | Get page count without calling vision (for the consent modal) |
 | `ormb pull --all` | Pull all annotated pages from your reMarkable folder |
+| `ormb publish <file> --on-exists fail` | Refuse to overwrite an existing page (default) |
+| `ormb publish <file> --on-exists content-only` | Replace existing page only if content changed (preserves annotations) |
 | `ormb ls` | List files on reMarkable |
 | `ormb rm <page-name>` | Delete a file on reMarkable |
 | `ormb config set <key> <value>` | Set a configuration option |
+| `ormb config set-key` | Set the OpenRouter API key (interactive, not stored in shell history) |
 | `ormb config show` | Show current configuration |
 | `ormb pair` | Pair with reMarkable (prompts for one-time code) |
 | `ormb setup` | Install Playwright browser |
-| `ormb setup --rmapi` | Download and install rmapi binary |
+| `ormb setup --rmapi` | Download and install rmapi binary (version-pinned, sha256-verified) |
+| `ormb doctor` | Health check for dependencies and configuration |
 
 ## Configuration
 
-Config lives at `~/.obsidian-rm-bridge/config.toml`. Environment variables override file values.
+Config lives at `~/.obsidian-rm-bridge/config.toml`. Environment variables
+override file values.
 
 ```toml
 [vault]
@@ -165,14 +387,22 @@ folder = "/Obsidian"
 
 [vision]
 model = "z-ai/glm-4.5v"
-cross_verify_model = "gpt-4o"
 openrouter_api_key = ""
 
 [pdf]
 font_size = 14
 font_family = "Georgia"
 code_font_size = 12
+
+[render]
+sanitize_html = true       # strip raw <script>/on* HTML before PDF render
+resolve_wikilinks = true    # convert [[note]] to display text
 ```
+
+Environment variable overrides: `ORB_VAULT_PATH`, `ORB_RM_FOLDER`,
+`ORB_VISION_MODEL`, `OPENROUTER_API_KEY`, `ORB_PDF_FONT_SIZE`,
+`ORB_PDF_FONT_FAMILY`, `ORB_PDF_CODE_FONT_SIZE`,
+`ORB_SANITIZE_HTML`, `ORB_RESOLVE_WIKILINKS`.
 
 ## How Annotation Transcription Works
 
@@ -181,12 +411,85 @@ code_font_size = 12
 3. Each page is rendered to PNG at 300 DPI
 4. Pages are sent to a vision-capable LLM (GLM-4.5V by default)
 5. Handwritten annotations are transcribed to text
-6. Optionally cross-verified with a second model (GPT-4o)
-7. Transcribed annotations are appended to your source markdown file
+6. Transcribed annotations are appended to your source markdown file
+
+### Re-publishing after pulling
+
+When you pull annotations, a marker block is inserted into your note:
+`<!-- ormb:annotations doc="..." rev="..." -->`. If you re-publish the note
+(with `--on-exists content-only`), the marker block and annotation sections
+are **stripped** from the PDF automatically — they won't appear on your
+reMarkable. This prevents annotation round-trip clutter in the published PDF.
+
+## Security & Data Egress Disclosures
+
+This tool moves data between your machine, the reMarkable Cloud, and an
+external LLM provider. Please review these egress points before use.
+
+```mermaid
+flowchart TD
+    subgraph Local["Your machine"]
+        Vault["Obsidian vault\n(.md files)"]
+        CLI["ormb CLI"]
+        Cache["Pull cache\n(local, text only)"]
+    end
+    subgraph External["External services"]
+        RMCloud["reMarkable Cloud\n(PDF upload + download)"]
+        OpenRouter["OpenRouter\n(page images to text,\nvision LLM)"]
+    end
+    Vault -->|"publish: PDF"| CLI
+    CLI -->|"rmapi put"| RMCloud
+    RMCloud -->|"rmapi geta: annotated PDF"| CLI
+    CLI -->|"pull: PNG images"| OpenRouter
+    OpenRouter -->|"transcribed text"| CLI
+    CLI -->|"append annotations"| Vault
+    CLI -.->|"cache hit\nskip vision"| Cache
+```
+
+- **reMarkable Cloud egress (publish + pull):** when you `ormb publish`, the
+  rendered PDF is uploaded to the reMarkable Cloud via `rmapi` (the unofficial
+  Go client). When you `ormb pull`, the annotated PDF is downloaded from the
+  reMarkable Cloud via `rmapi`. Your markdown content transits reMarkable's
+  servers.
+- **OpenRouter egress (pull only):** when you `ormb pull`, each page is
+  rendered to a PNG image and sent to [OpenRouter](https://openrouter.ai) for
+  vision transcription. The images and the returned transcribed text transit
+  OpenRouter and the underlying model provider. The first pull shows a
+  **consent modal** (plugin) / requires you to run the command explicitly
+  (CLI) — no pull happens automatically. You need an OpenRouter API key, set
+  via `ormb config set-key`.
+- **External binary execution:** the Obsidian plugin spawns `ormb` (the
+  Python CLI), which in turn spawns **Chromium** (via Playwright, for
+  markdown→PDF and mermaid rendering) and **`rmapi`** (a third-party Go binary
+  downloaded from `ddvk/rmapi` releases, version-pinned and sha256-verified).
+  The plugin never invokes a shell (`shell: true` is banned in `plugin/src/`
+  and enforced by CI).
+- **HTML sanitisation:** raw HTML embedded in a note (e.g. `<script>` or
+  `on*` event handlers) is stripped via [bleach](https://github.com/mozilla/bleach)
+  before the PDF render, so it cannot reach Playwright/Chromium. This is on
+  by default (`render.sanitize_html = true`); disable it only if you trust
+  your vault's contents.
+- **Local pull cache:** `ormb pull` caches vision results by PDF content hash
+  at `~/.obsidian-rm-bridge/pull_cache.json` so re-pulling an unchanged
+  document does not re-pay OpenRouter. The cache contains transcribed text; no
+  images are stored.
 
 ## Architecture
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full architecture breakdown and [docs/LINEAGE.md](docs/LINEAGE.md) for project history.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full architecture
+breakdown and [docs/LINEAGE.md](docs/LINEAGE.md) for project history.
+
+### Maintainer & developer docs
+
+- [Architecture & delivery plan](docs/ARCHITECTURE.md) — system design, C4 diagrams, design contracts
+- [Project lineage](docs/LINEAGE.md) — phase history and source provenance
+- [ARB decision record](docs/ARB-OBSIDIAN-PLUGIN.md) — the 5-stage ARB that designed the plugin
+- [Community store submission](docs/COMMUNITY-STORE-SUBMISSION.md) — checklist for store submission
+- [T-WSL test playbook](docs/T-WSL-TEST-PLAYBOOK.md) — E2E test cases for operator testing
+- [Troubleshooting](docs/TROUBLESHOOTING.md) — common issues and solutions
+- [FAQ](docs/FAQ.md) — frequently asked questions
+- [Glossary](docs/GLOSSARY.md) — terminology reference
+- [Contributing](CONTRIBUTING.md) — developer setup, test commands, PR conventions
 
 ## License
 

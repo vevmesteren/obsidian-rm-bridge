@@ -1,6 +1,10 @@
 # obsidian-rm-bridge — Architecture & Delivery Plan
 
-> **Status:** Phase 5b — Pull annotations + marker blocks shipped. Phase 5c (native adapters + README + community store) next.
+> **Audience:** Developers and architects
+
+← Back to [README](../README.md)
+
+> **Status:** Phase 5b — Pull annotations + marker blocks shipped. Phase 5c (native adapters + README + community store) in progress.
 > **Author:** vevmesteren
 > **Date:** 2026-11-13
 > **Repo:** [vevmesteren/obsidian-rm-bridge](https://github.com/vevmesteren/obsidian-rm-bridge)
@@ -24,7 +28,7 @@ This project is the open-source extraction of the **veviki-remarkable-bridge** �
 ### What's Proven
 
 - **Publish flow:** markdown → mermaid render → HTML → PDF → rmapi upload. Works for single pages and folders.
-- **Retrieve flow:** rmapi refresh → geta → pymupdf 300 DPI render → GLM-4.5V transcription → append to source .md. Cross-verified with GPT-4o.
+- **Retrieve flow:** rmapi refresh → geta → pymupdf 300 DPI render → GLM-4.5V transcription → append to source .md.
 - **Real usage:** Published `craft-anything-integration-plan.md` to reMarkable, annotated it, pulled annotations back via vision model.
 
 ### What's Coupled (Must Decouple)
@@ -65,7 +69,7 @@ graph TB
     ORB["🔧 obsidian-rm-bridge CLI<br/>(`ormb` — Python package)"]
     RM["📟 reMarkable Tablet<br/>(Paper Pro / RM2)"]
     Cloud["☁️ reMarkable Cloud API"]
-    Vision["🤖 Vision LLM<br/>(GLM-4.5V / GPT-4o)"]
+    Vision["Vision LLM\n(GLM-4.5V)"]
     Vault["📚 Obsidian Vault<br/>(local markdown)"]
 
     User -->|"ormb publish"| ORB
@@ -135,7 +139,7 @@ graph LR
         R2["2. rmapi geta --a"]
         R3["3. PDF → PNG @ 300 DPI<br/>(pymupdf)"]
         R4["4. Each PNG → Vision LLM<br/>(GLM-4.5V primary)"]
-        R5["5. Cross-verify pages<br/>(GPT-4o, optional)"]
+        R5["5. Transcribe pages\n(GLM-4.5V)"]
         R6["6. Filter no-annotation pages"]
         R7["7. Format as MD section"]
         R8["8. Append to source .md"]
@@ -254,10 +258,11 @@ ormb setup --rmapi
 ormb pair
 
 # 5. Configure
-ormb config set vault_path ~/my-obsidian-vault
-ormb config set rm_folder /Obsidian
-ormb config set vision_model z-ai/glm-4.5v
-ormb config set openrouter_api_key sk-or-v1-xxx
+ormb config set vault.path ~/my-obsidian-vault
+ormb config set rm.folder /Obsidian
+ormb config set vision.model z-ai/glm-4.5v
+# Set API key interactively (not in argv — security: secrets never in process args)
+ormb config set-key
 ```
 
 ### Platform-Specific Notes
@@ -290,11 +295,14 @@ ormb publish <path-to-folder> --folder  # All .md files → combined PDF → reM
 ormb publish <path-to-md> --json       # JSON envelope on stdout (plugin-facing)
 ormb publish <path-to-md> --vault <root>  # Explicit vault root (containment-checked)
 ormb publish <path-to-md> --on-exists fail|content-only  # Don't destroy annotations
+ormb publish <path-to-md> --rm-folder /Custom  # Publish to a custom reMarkable folder
 
 # Retrieve
 ormb pull <page-name>                   # Download + transcribe + append
+ormb pull <page-name> --md <path>       # Specify source .md (for subdirectory notes)
 ormb pull <page-name> --emit json       # Return sections without writing to disk
 ormb pull <page-name> --json            # JSON envelope on stdout
+ormb pull <page-name> --info --json     # Page count only (no vision call)
 ormb pull --all                          # Pull all annotated pages from /<rm_folder>
 
 # Configuration
@@ -332,13 +340,15 @@ folder = "/Obsidian"              # reMarkable destination folder
 
 [vision]
 model = "z-ai/glm-4.5v"          # Primary transcription model
-cross_verify_model = "gpt-4o"    # Optional second model for verification
 openrouter_api_key = ""           # Or set OPENROUTER_API_KEY env var
 
 [pdf]
 font_size = 14                    # Body font size (pt)
 font_family = "Georgia"           # Body font family
 code_font_size = 12               # Code block font size (pt)
+[render]
+sanitize_html = true              # Strip raw <script>/on* HTML before PDF render
+resolve_wikilinks = true           # Convert [[note]] to display text
 ```
 
 Environment variables override config file:
@@ -346,6 +356,11 @@ Environment variables override config file:
 - `ORB_RM_FOLDER`
 - `ORB_VISION_MODEL`
 - `OPENROUTER_API_KEY`
+- `ORB_PDF_FONT_SIZE`
+- `ORB_PDF_FONT_FAMILY`
+- `ORB_PDF_CODE_FONT_SIZE`
+- `ORB_SANITIZE_HTML`
+- `ORB_RESOLVE_WIKILINKS`
 
 ---
 
@@ -375,7 +390,7 @@ Environment variables override config file:
 - **Done criteria:** All tests pass, `ormb publish` and `ormb pull` work end-to-end on a fresh clone, README install instructions verified on at least Linux (Hermes host), CLI produces correct PDF with mermaid rendering
 - **Branch:** `feat/v0.1.0-cli` → PR → cold review → merge to main
 
-### Phase 5 — Obsidian Plugin (shipped 5a)
+### Phase 5 — Obsidian Plugin (shipped 5a + 5b, 5c in progress)
 
 The TypeScript Obsidian plugin is a thin wrapper around the `ormb` CLI:
 
@@ -401,9 +416,8 @@ The TypeScript Obsidian plugin is a thin wrapper around the `ormb` CLI:
 | DC-4 | Vision model is configurable, default GLM-4.5V via OpenRouter | Users may prefer GPT-4o or local models; don't hardcode |
 | DC-5 | `rmapi refresh` is mandatory before `geta` | Cloud index is stale after annotation; without refresh, geta fails |
 | DC-6 | All PDF pages go to vision model — no pre-filtering by drawing count | pymupdf drawing counts include table borders and diagram lines, not just handwriting |
-| DC-7 | Annotations appended as `## Annotations from reMarkable — YYYY-MM-DD` | Consistent, parseable format |
-| DC-8 | `rmapi put` never uses `--force` (creates duplicates, not replacements) | To replace, delete first then upload; always ask user |
-| DC-9 | Cross-verify transcription with two vision models when accuracy matters | Single model is insufficient for confident handwriting transcription |
+| DC-7 | Annotations appended as `## [YYYY-MM-DD] Annotations` | Consistent, parseable format |
+| DC-8 | `rmapi put` uses `--on-exists fail` by default; `--on-exists content-only` replaces only if content changed | Protects annotations: never destroys a page that has been annotated; marker blocks strip annotation sections from republished PDFs |
 | DC-10 | Package is `obsidian_rm_bridge` (Python), CLI is `ormb` | Short, memorable, namespaced |
 
 ---

@@ -103,13 +103,3 @@ def test_transcribe_pages_all_failed_raises(tmp_path):
         import pytest
         with pytest.raises(RuntimeError, match="All 3 page.*failed"):
             vision_client.transcribe_pages(pngs, "fake-key")
-
-
-def test_cross_verify_returns_both(tmp_path):
-    png = tmp_path / "p.png"
-    png.write_bytes(b"x")
-    with patch("obsidian_rm_bridge.vision_client.transcribe_page",
-               side_effect=["primary note", "verify note"]):
-        prim, ver = vision_client.cross_verify(png, "k")
-    assert prim == "primary note"
-    assert ver == "verify note"

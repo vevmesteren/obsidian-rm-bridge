@@ -18,7 +18,18 @@ export interface PlatformConfig {
   visionModel: string;
   /** WSL automount root, e.g. "/mnt". Used to translate Windows → WSL paths. */
   automountRoot: string;
+  /** Active topology. 'auto' defers to detectTopology() at load. */
+  topology: Topology | "auto";
 }
+
+/**
+ * Platform topology. Selects which ExecutionAdapter is used.
+ * - `wsl`: Obsidian on Windows, ormb CLI in WSL2 (primary, proven topology).
+ * - `mac`: Obsidian on macOS, native CLI.
+ * - `linux`: Obsidian on Linux, native CLI.
+ * - `win`: Obsidian on Windows, native CLI (no WSL).
+ */
+export type Topology = "wsl" | "mac" | "linux" | "win";
 
 /** Payload returned by `ormb publish --json` on success. */
 export interface OrmbPublishData {
@@ -62,6 +73,8 @@ export interface DoctorResult {
   paired: boolean;
   key_present: boolean;
   errors: string[];
+  /** Active topology, reported by the plugin (CLI doctor may omit it). */
+  topology?: string;
 }
 
 /**
@@ -73,6 +86,8 @@ export interface ExecutionAdapter {
   spawn(args: string[], onStderr?: (line: string) => void): Promise<OrmbResult>;
   doctor(): Promise<DoctorResult>;
   translateVaultRoot(windowsPath: string): string;
+  /** Abort the running child process, if any (called from Plugin.onunload). */
+  abort(): void;
 }
 
 /** Persisted plugin settings (data.json). NO secrets — no API key field. */
@@ -85,4 +100,6 @@ export interface OrmbSettings {
   automountRoot: string;
   /** First-run consent for the pull path (OpenRouter egress). Sticky once true. */
   pullConsentGiven: boolean;
+  /** Selected topology. 'auto' = detect at load; otherwise force a topology. */
+  topology: Topology | "auto";
 }
