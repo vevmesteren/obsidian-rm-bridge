@@ -4,7 +4,7 @@
 
 ← Back to [README](../README.md)
 
-> **Status:** Phase 5b — Pull annotations + marker blocks shipped. Phase 5c (native adapters + README + community store) in progress.
+> **Status:** Phase 5 complete. Plugin shipped to Obsidian community store ([community.obsidian.md/plugins/rm-bridge](https://community.obsidian.md/plugins/rm-bridge)). All phases delivered.
 > **Author:** vevmesteren
 > **Date:** 2026-11-13
 > **Repo:** [vevmesteren/remarkable-roundtrip](https://github.com/vevmesteren/remarkable-roundtrip)
@@ -22,8 +22,8 @@ This project is the open-source extraction of the **veviki-remarkable-bridge** �
 | Phase 1 | 2026-11-12 | ✅ Done | `publish.py` — markdown → PDF → reMarkable upload (PoC) |
 | Phase 2 | 2026-11-12 | ✅ Done | `retrieve.py` — annotation round-trip via GLM-4.5V vision |
 | Phase 3 | 2026-11-12 | ✅ Done | Polish: tests, CSS e-ink styling, folder publish, re-upload handling |
-| **Phase 4** | **2026-11-12** | **✅ Done** | **Open source extraction — this document** |
-| **Phase 5** | **2026-11-13** | **In Progress** | **Obsidian TypeScript plugin (thin wrapper over CLI)** |
+| Phase 4 | 2026-11-12 | ✅ Done | Open source extraction — this document |
+| Phase 5 | 2026-11-15 | ✅ Done | Obsidian TypeScript plugin (thin wrapper over CLI) — shipped to community store |
 
 ### What's Proven
 
@@ -390,7 +390,7 @@ Environment variables override config file:
 - **Done criteria:** All tests pass, `ormb publish` and `ormb pull` work end-to-end on a fresh clone, README install instructions verified on at least Linux (Hermes host), CLI produces correct PDF with mermaid rendering
 - **Branch:** `feat/v0.1.0-cli` → PR → cold review → merge to main
 
-### Phase 5 — Obsidian Plugin (shipped 5a + 5b, 5c in progress)
+### Phase 5 — Obsidian Plugin (shipped)
 
 The TypeScript Obsidian plugin is a thin wrapper around the `ormb` CLI:
 
@@ -402,7 +402,7 @@ The TypeScript Obsidian plugin is a thin wrapper around the `ormb` CLI:
 - **Doctor on load**: surfaces warnings (rmapi missing, not paired, key missing, Chromium missing)
 - **CI grep ban**: `exec(`, `execSync(`, `shell: true`, `bash -c`, `cmd.exe /c` banned in `plugin/src/`
 
-**Primary topology:** T-WSL (Obsidian on Windows, ormb CLI in WSL2). T-MAC, T-LINUX, T-WIN deferred to Phase 5c.
+**Primary topology:** T-WSL (Obsidian on Windows, ormb CLI in WSL2). T-MAC, T-LINUX, T-WIN supported via native adapters (shipped in Phase 5c).
 
 ---
 
