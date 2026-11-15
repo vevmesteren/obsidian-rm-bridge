@@ -6,7 +6,7 @@
 #   ./scripts/install-plugin.sh <vault-path> --watch    # rebuild on change
 #
 # Detects the platform and copies main.js + manifest.json to:
-#   <vault>/.obsidian/plugins/obsidian-rm-bridge/
+#   <vault>/.obsidian/plugins/rm-bridge/
 #
 # On T-WSL, the vault path is a Windows path (C:\dev\veviki) or a WSL path
 # (/mnt/c/dev/veviki). Both are handled.
@@ -46,7 +46,7 @@ if [ ! -d "${VAULT}" ]; then
   exit 1
 fi
 
-VAULT_PLUGINS="${VAULT}/.obsidian/plugins/obsidian-rm-bridge"
+VAULT_PLUGINS="${VAULT}/.obsidian/plugins/rm-bridge"
 
 # --- Build --------------------------------------------------------------
 

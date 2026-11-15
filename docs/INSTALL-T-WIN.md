@@ -57,7 +57,7 @@ npm run build
 
 # Copy manually (native Windows)
 $vault = "C:\dev\MyVault"
-$dest = "$vault\.obsidian\plugins\obsidian-rm-bridge"
+$dest = "$vault\.obsidian\plugins\rm-bridge"
 New-Item -ItemType Directory -Force -Path $dest
 Copy-Item main.js $dest
 Copy-Item manifest.json $dest

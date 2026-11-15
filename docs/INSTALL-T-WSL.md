@@ -54,7 +54,7 @@ Replace `/mnt/c/dev/veviki` with your Obsidian vault path (WSL-style: `/mnt/c/..
 
 The script:
 - Runs `npm install` + `npm run build` in `plugin/`
-- Copies `main.js` + `manifest.json` to `<vault>/.obsidian/plugins/obsidian-rm-bridge/`
+- Copies `main.js` + `manifest.json` to `<vault>/.obsidian/plugins/rm-bridge/`
 
 ## 3. Enable in Obsidian
 

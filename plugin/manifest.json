@@ -1,5 +1,5 @@
 {
-  "id": "obsidian-rm-bridge",
+  "id": "rm-bridge",
   "name": "Obsidian reMarkable Bridge",
   "version": "0.1.0",
   "minAppVersion": "1.5.0",

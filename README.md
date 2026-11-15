@@ -281,7 +281,7 @@ Until then, install from source with the install script:
 ```
 
 The script runs `npm run build` and copies `main.js` + `manifest.json` into
-`<vault>/.obsidian/plugins/obsidian-rm-bridge/`. It handles WSL paths
+`<vault>/.obsidian/plugins/rm-bridge/`. It handles WSL paths
 (`/mnt/c/...`) and Windows paths (`C:\...`) automatically.
 
 For step-by-step per-topology instructions, see:

@@ -61,7 +61,7 @@ If `ormb doctor --json` shows `paired: false`:
    ```powershell
    # In Windows PowerShell — adjust $vault to your vault path
    $vault = "C:\dev\veviki"
-   $dest = "$vault\.obsidian\plugins\obsidian-rm-bridge"
+   $dest = "$vault\.obsidian\plugins\rm-bridge"
    New-Item -ItemType Directory -Force -Path $dest
    Copy-Item "C:\dev\obsidian-rm-bridge\plugin\main.js" $dest
    Copy-Item "C:\dev\obsidian-rm-bridge\plugin\manifest.json" $dest

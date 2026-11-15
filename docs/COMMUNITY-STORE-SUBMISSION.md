@@ -16,7 +16,7 @@ submit the PR — that is an explicit human action.
 
 Verified against `plugin/manifest.json`:
 
-- [x] `id`: `"obsidian-rm-bridge"` (unique, lowercase, kebab-case, matches
+- [x] `id`: `"rm-bridge"` (unique, lowercase, kebab-case, matches
   the plugin folder name and the `community-plugins.json` entry)
 - [x] `name`: `"Obsidian reMarkable Bridge"` (human-readable)
 - [x] `version`: `"0.1.0"` (matches `plugin/versions.json` key)
@@ -125,14 +125,14 @@ cd release
    `main.js`; otherwise build manually and attach `main.js`,
    `manifest.json`, and `styles.css` to the GitHub release.
 3. **Verify the release** — download the three files into a fresh vault's
-   `plugins/obsidian-rm-bridge/` folder and confirm the plugin loads.
+   `plugins/rm-bridge/` folder and confirm the plugin loads.
 4. **Open the PR** — fork
    [`obsidianmd/obsidian-releases`](https://github.com/obsidianmd/obsidian-releases),
    add one line to `community-plugins.json`:
 
    ```json
    {
-     "id": "obsidian-rm-bridge",
+     "id": "rm-bridge",
      "name": "Obsidian reMarkable Bridge",
      "author": "vevmesteren",
      "description": "Publish notes to reMarkable and pull back handwritten annotations",
