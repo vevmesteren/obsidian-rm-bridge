@@ -167,12 +167,15 @@ ormb setup          # installs Chromium + system libs (libgbm, libnss, etc.)
 
 ## Topologies
 
-The bridge has been validated across four host/topology combinations. Pick
-the one that matches where Obsidian runs.
+The bridge works across five topologies. **T-AGENT** is the original use case:
+an AI harness produces artifacts, pushes them to e-ink, and pulls handwritten
+annotations back into the conversation — no Obsidian required. The other four
+are Obsidian plugin topologies, each defined by where Obsidian runs.
 
 | Topology | Obsidian on | CLI / venv / rmapi | Status |
 |----------|------------|-------------------|-------|
-| T-WSL | Windows | WSL2 Ubuntu | Primary, E2E-tested |
+| T-AGENT | N/A — no Obsidian | Any OS with Python 3.10+ | Original use case — in daily use |
+| T-WSL | Windows | WSL2 Ubuntu | Primary Obsidian topology, E2E-tested |
 | T-MAC | macOS | Native venv | Untested — seeking community testers |
 | T-LINUX | Linux desktop | Native venv + rmapi | Untested — seeking community testers |
 | T-WIN | Windows | Native Windows Python | Untested — seeking community testers |
@@ -181,7 +184,9 @@ the one that matches where Obsidian runs.
 
 ```mermaid
 flowchart TD
-    Start["What OS is Obsidian running on?"] --> Q1{"Windows?"}
+    Start["How will you use it?"] --> Q0{"Using the\nObsidian plugin?"}
+    Q0 -->|No — agent/CLI only| TAGENT["T-AGENT\nAI harness\n(original topology)"]
+    Q0 -->|Yes| Q1{"Windows?"}
     Q1 -->|Yes| Q2{"Comfortable with\nWSL2?"}
     Q1 -->|No| Q3{"macOS?"}
     Q1 -->|No| Q4{"Linux?"}
@@ -189,6 +194,66 @@ flowchart TD
     Q2 -->|No| TWIN["T-WIN\n(Windows native Python)\nINSTALL-T-WIN.md"]
     Q3 -->|Yes| TMAC["T-MAC\nINSTALL-T-MAC.md"]
     Q4 -->|Yes| TLINUX["T-LINUX\nINSTALL-T-LINUX.md"]
+```
+
+### T-AGENT — AI harness (original topology)
+
+No Obsidian. No plugin. No GUI. The harness **is** the interface.
+
+The agent produces an artifact — a document, a plan, research output — and
+pushes it to the reMarkable as a PDF. The human reads it on e-ink, annotates by
+hand, and tells the agent when they're done. The agent pulls the annotated PDF
+back, transcribes the handwriting via vision LLM, and incorporates the feedback
+into the conversation.
+
+This is the use case the round-trip was built for — before it was productized
+into an Obsidian plugin.
+
+**Setup:** same CLI, same `ormb` commands. No `vault.path` needed — the agent
+uses absolute paths with `--md`.
+
+#### Capability brief
+
+Paste this into any AI harness (Hermes, Claude, Cursor, or any agent that can
+run shell commands):
+
+```
+# reMarkable Roundtrip — Agent Capability
+
+## Setup (one-time)
+
+Install the CLI:
+
+  git clone https://github.com/vevmesteren/remarkable-roundtrip.git
+  cd remarkable-roundtrip
+  python3 -m venv .venv && source .venv/bin/activate
+  pip install -e .
+  ormb setup --rmapi       # downloads rmapi for your platform
+  ormb setup               # installs Chromium for PDF rendering
+  ormb pair                # pair with reMarkable (get a code at my.remarkable.com/connect)
+
+For pull (annotation transcription), set an OpenRouter API key:
+  ormb config set-key      # interactive — prompts for the key, not stored in shell history
+
+## Round-trip protocol
+
+When I ask you to push something to my reMarkable:
+  - Render the document and run: ormb publish <path-to-file.md>
+  - Use absolute paths if the file isn't under a configured vault path
+
+When I tell you I'm done annotating (I've marked it up on my reMarkable):
+  - Run: ormb pull <page-name> --md <path-to-source.md>
+  - The page name is the filename stem (e.g. "c4-system-landscape")
+  - Read my transcribed annotations and incorporate them into our conversation
+  - Continue our work based on my feedback
+
+## What this gives us
+
+  - I read your output on e-ink paper — no notifications, no tabs, no Slack
+  - I annotate by hand — circling, crossing out, writing in the margins
+  - You read my handwriting back as text and we continue
+  - The technology disappears; what's left is a person thinking on paper
+    and a machine that can read it.
 ```
 
 ### T-WSL — Windows + WSL2 Ubuntu (primary)
