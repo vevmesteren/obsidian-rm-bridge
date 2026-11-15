@@ -47,13 +47,15 @@ function renderStatusGrid(container: HTMLElement, doc: DoctorResult, topology?: 
     ["api key present", doc.key_present ? "yes" : "no"],
   ];
   for (const [k, v] of rows) {
-    const row = container.createEl("div", { cls: "ormb-status-row" });
-    row.createEl("span", { text: k, cls: "ormb-status-key" });
-    row.createEl("span", { text: v, cls: "ormb-status-val" });
+    const row = createEl("div", { cls: "ormb-status-row" });
+    row.appendChild(createEl("span", { text: k, cls: "ormb-status-key" }));
+    row.appendChild(createEl("span", { text: v, cls: "ormb-status-val" }));
+    container.appendChild(row);
   }
   if (doc.errors.length > 0) {
-    const errs = container.createEl("div", { cls: "ormb-status-errors" });
-    for (const e of doc.errors) errs.createEl("div", { text: `• ${e}` });
+    const errs = createEl("div", { cls: "ormb-status-errors" });
+    for (const e of doc.errors) errs.appendChild(createEl("div", { text: `• ${e}` }));
+    container.appendChild(errs);
   }
 }
 
@@ -71,7 +73,7 @@ export class OrmbSettingsTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    new Setting(containerEl).setName("reMarkable Roundtrip").setHeading();
+    new Setting(containerEl).setName("Setup").setHeading();
     new Setting(containerEl).setDesc("The plugin wraps the ormb CLI in WSL. No API key is stored here — it lives in the CLI's 0600 config inside your WSL home.");
 
     // --- Launcher ---------------------------------------------------------
