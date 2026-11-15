@@ -56,7 +56,7 @@ ormb pair
 ormb config set vault.path ~/Documents/Obsidian
 ```
 
-<!-- Once published to PyPI, the above can be replaced with `pip install remarkable-roundtrip` -->
+> **PyPI:** Not yet on PyPI. Install from source for now (`pip install -e .`).
 
 > **WSL/Ubuntu users:** If `python3 -m venv .venv` fails with "ensurepip not available",
 > install the venv package for your Python version, e.g. `sudo apt install python3.10-venv`,

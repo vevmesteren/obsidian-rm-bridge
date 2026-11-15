@@ -5,7 +5,7 @@
 // secrets. Setup/pair/set-key stay terminal-only and are surfaced here as
 // copyable commands.
 
-import { Notice, PluginSettingTab, Setting } from "obsidian";
+import { Notice, PluginSettingTab, Setting, createEl } from "obsidian";
 import type ObsidianRmBridgePlugin from "./main.ts";
 import type { DoctorResult } from "./types.ts";
 import { NOTICE_OK_TIMEOUT, NOTICE_WARN_TIMEOUT } from "./notice.ts";
@@ -64,19 +64,15 @@ export class OrmbSettingsTab extends PluginSettingTab {
   constructor(app: import("obsidian").App, plugin: ObsidianRmBridgePlugin) {
     super(app, plugin);
     this.plugin = plugin;
-    this.statusHost = document.createElement("div");
-    this.statusHost.className = "ormb-status-grid";
+    this.statusHost = createEl("div", { cls: "ormb-status-grid" });
   }
 
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
 
-    containerEl.createEl("h3", { text: "Obsidian reMarkable Bridge" });
-    containerEl.createEl("p", {
-      text: "The plugin wraps the ormb CLI in WSL. No API key is stored here — it lives in the CLI's 0600 config inside your WSL home.",
-      cls: "setting-item-description",
-    });
+    new Setting(containerEl).setName("reMarkable Roundtrip").setHeading();
+    new Setting(containerEl).setDesc("The plugin wraps the ormb CLI in WSL. No API key is stored here — it lives in the CLI's 0600 config inside your WSL home.");
 
     // --- Launcher ---------------------------------------------------------
     new Setting(containerEl)
@@ -213,11 +209,8 @@ export class OrmbSettingsTab extends PluginSettingTab {
     containerEl.appendChild(this.statusHost);
 
     // --- Copyable terminal commands --------------------------------------
-    containerEl.createEl("h3", { text: "Terminal setup commands" });
-    containerEl.createEl("p", {
-      text: "Run these in your WSL terminal. The plugin cannot perform these (they need a TTY / sudo).",
-      cls: "setting-item-description",
-    });
+    new Setting(containerEl).setName("Terminal setup commands").setHeading();
+    new Setting(containerEl).setDesc("Run these in your WSL terminal. The plugin cannot perform these (they need a TTY / sudo).");
     for (const c of COPYABLE_COMMANDS) {
       const setting = new Setting(containerEl).setName(c.label).setDesc(c.command);
       setting.addButton((btn) => {
