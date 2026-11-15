@@ -15,7 +15,7 @@
 ## 1. Install the CLI
 
 ```bash
-git clone https://github.com/vevmesteren/obsidian-rm-bridge.git
+git clone https://github.com/vevmesteren/remarkable-bridge.git
 cd obsidian-rm-bridge
 
 python3 -m venv .venv

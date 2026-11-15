@@ -16,7 +16,7 @@
 
 ```powershell
 # Clone the repo
-git clone https://github.com/vevmesteren/obsidian-rm-bridge.git
+git clone https://github.com/vevmesteren/remarkable-bridge.git
 cd obsidian-rm-bridge
 
 # Create a venv and install

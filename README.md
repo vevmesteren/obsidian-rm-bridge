@@ -37,7 +37,7 @@ flowchart LR
 > End users: `pip install -e .` is sufficient.
 
 ```bash
-git clone https://github.com/vevmesteren/obsidian-rm-bridge.git
+git clone https://github.com/vevmesteren/remarkable-bridge.git
 cd obsidian-rm-bridge
 
 # Use a venv (avoids system Python permission issues)

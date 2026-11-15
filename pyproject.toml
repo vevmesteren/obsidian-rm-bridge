@@ -42,9 +42,9 @@ dev = [
 ormb = "obsidian_rm_bridge.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/vevmesteren/obsidian-rm-bridge"
-Repository = "https://github.com/vevmesteren/obsidian-rm-bridge"
-Issues = "https://github.com/vevmesteren/obsidian-rm-bridge/issues"
+Homepage = "https://github.com/vevmesteren/remarkable-bridge"
+Repository = "https://github.com/vevmesteren/remarkable-bridge"
+Issues = "https://github.com/vevmesteren/remarkable-bridge/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]

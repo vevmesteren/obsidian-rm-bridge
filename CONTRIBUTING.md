@@ -10,7 +10,7 @@ wrapper around a Python CLI (`ormb`), so contributions span both sides.
 ## Development setup
 
 ```bash
-git clone https://github.com/vevmesteren/obsidian-rm-bridge.git
+git clone https://github.com/vevmesteren/remarkable-bridge.git
 cd obsidian-rm-bridge
 
 # Python CLI (with dev dependencies)

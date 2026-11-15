@@ -136,7 +136,7 @@ cd release
      "name": "Obsidian reMarkable Bridge",
      "author": "vevmesteren",
      "description": "Publish notes to reMarkable and pull back handwritten annotations",
-     "repo": "vevmesteren/obsidian-rm-bridge"
+     "repo": "vevmesteren/remarkable-bridge"
    }
    ```
 
