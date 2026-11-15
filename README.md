@@ -1,12 +1,14 @@
 # reMarkable Roundtrip
 
-> Publish Obsidian markdown pages to your reMarkable tablet as PDFs, annotate by hand, then pull handwriting back into your vault as structured text.
+> Publish documents to your reMarkable tablet as PDFs, annotate by hand, then pull handwriting back as structured text.
 
-The only reMarkable ↔ Obsidian tool that does the **full round-trip**.
+The only reMarkable tool that does the **full round-trip** — publish, annotate by hand, pull handwriting back as text. Works with an AI agent directly or through the Obsidian plugin.
 
-> **Install from the community store:** Settings → Community plugins → Browse →
-> search "reMarkable Roundtrip" → Install → Enable. The CLI backend still
-> requires terminal setup (see [Quick Start](#quick-start) below).
+> **Using an AI agent without Obsidian?** Jump to [T-AGENT](#t-agent--ai-harness-original-topology) — the original topology.
+
+> **Install the Obsidian plugin from the community store:** Settings → Community
+> plugins → Browse → search "reMarkable Roundtrip" → Install → Enable. The CLI
+> backend still requires terminal setup (see [Quick Start](#quick-start) below).
 
 > **Data egress:** Publishing sends your PDF to reMarkable Cloud. Pulling
 > sends page images to OpenRouter for handwriting transcription. See
@@ -16,14 +18,14 @@ The only reMarkable ↔ Obsidian tool that does the **full round-trip**.
 
 ```mermaid
 flowchart LR
-    A["Obsidian note\n(.md)"] -->|ormb publish| B["PDF render\n(Playwright)"]
+    A["Document (.md)\nagent or vault"] -->|ormb publish| B["PDF render\n(Playwright)"]
     B --> C["reMarkable Cloud\n(rmapi upload)"]
     C --> D["reMarkable tablet\n(annotate by hand)"]
     D --> E["reMarkable Cloud\n(sync annotated PDF)"]
     E -->|ormb pull| F["PNG @ 300 DPI\n(pymupdf)"]
     F --> G["OpenRouter\n(vision LLM)"]
     G --> H["Transcribed text"]
-    H --> I["Obsidian note\n(annotations appended)"]
+    H --> I["Vault or conversation\n(annotations incorporated)"]
     I -.->|ormb publish\n--on-exists content-only| B
 ```
 
