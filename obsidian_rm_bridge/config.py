@@ -1,4 +1,4 @@
-"""Configuration for obsidian-rm-bridge.
+"""Configuration for reMarkable Roundtrip.
 
 Config lives at ``~/.obsidian-rm-bridge/config.toml`` (nested TOML schema).
 Environment variables override file values; defaults are used when neither is

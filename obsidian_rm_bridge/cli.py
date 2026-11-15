@@ -1,4 +1,4 @@
-"""``ormb`` CLI entry point for obsidian-rm-bridge.
+"""``ormb`` CLI entry point for reMarkable Roundtrip.
 
 argparse-based subcommands (no Click/Typer dependency — keeps the install lean;
 ``ormb --help`` lists every command). All commands read config from
@@ -149,7 +149,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="ormb",
         description=(
-            "obsidian-rm-bridge — publish Obsidian markdown to reMarkable as PDFs, "
+            "reMarkable Roundtrip — publish Obsidian markdown to reMarkable as PDFs, "
             "then pull handwritten annotations back into your vault."
         ),
     )

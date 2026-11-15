@@ -1,4 +1,4 @@
-"""Shared fixtures and skip helpers for obsidian-rm-bridge tests."""
+"""Shared fixtures and skip helpers for reMarkable Roundtrip tests."""
 
 from __future__ import annotations
 

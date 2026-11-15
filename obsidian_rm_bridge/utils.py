@@ -1,4 +1,4 @@
-"""Shared helpers for obsidian-rm-bridge."""
+"""Shared helpers for reMarkable Roundtrip."""
 
 from __future__ import annotations
 

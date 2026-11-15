@@ -3,7 +3,7 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "obsidian-rm-bridge"
+name = "remarkable-roundtrip"
 version = "0.1.0"
 description = "Publish Obsidian markdown to reMarkable, annotate by hand, pull handwriting back into your vault"
 readme = "README.md"

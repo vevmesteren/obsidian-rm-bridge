@@ -140,7 +140,7 @@ cd release
    }
    ```
 
-   Open the PR with the title `New plugin submission: obsidian-rm-bridge`.
+   Open the PR with the title `New plugin submission: remarkable-roundtrip`.
 5. **Respond to review** — the Obsidian team reviews for the manifest
    fields, the banned-pattern check, and the disclosure README. Keep this
    document and the README disclosures in sync with any review feedback.

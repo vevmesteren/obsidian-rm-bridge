@@ -180,7 +180,7 @@ def test_publish_resolves_relative_path_against_vault(tmp_config, tmp_path, monk
     md.write_text("# C4 Landscape\n\nContent.\n")
     cfg.set("vault.path", str(vault_dir))
     # CWD is NOT the vault
-    other_dir = tmp_path / "obsidian-rm-bridge"
+    other_dir = tmp_path / "remarkable-roundtrip"
     other_dir.mkdir()
     monkeypatch.chdir(other_dir)
     with patch("obsidian_rm_bridge.cli.publisher.publish_page", return_value=("/test", 1)) as m_pub:

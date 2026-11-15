@@ -1,4 +1,4 @@
-"""obsidian-rm-bridge — Publish Obsidian markdown to reMarkable, pull handwritten annotations back.
+"""reMarkable Roundtrip — Publish Obsidian markdown to reMarkable, pull handwritten annotations back.
 
 A Python package that does the full Obsidian → reMarkable → Obsidian round-trip:
 publish markdown pages (with mermaid diagrams) to reMarkable as PDFs via Playwright,

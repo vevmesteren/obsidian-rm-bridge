@@ -6,10 +6,10 @@
 
 | Term | Definition |
 |------|-----------|
-| **ormb** | The CLI for obsidian-rm-bridge. Short for "reMarkable Roundtrip." |
+| **ormb** | The CLI for reMarkable Roundtrip. Short for "reMarkable Roundtrip." |
 | **rmapi** | A third-party Go binary ([ddvk/rmapi](https://github.com/ddvk/rmapi)) that communicates with the reMarkable Cloud API. Used for uploading PDFs and downloading annotated documents. |
-| **Playwright** | A browser automation library (by Microsoft) that drives Chromium. obsidian-rm-bridge uses it to render markdown → PDF (including mermaid diagrams) without a GUI. |
-| **OpenRouter** | An API aggregator for LLMs. obsidian-rm-bridge uses it to access vision-capable models (like GLM-4.5V) for handwriting transcription. |
+| **Playwright** | A browser automation library (by Microsoft) that drives Chromium. reMarkable Roundtrip uses it to render markdown → PDF (including mermaid diagrams) without a GUI. |
+| **OpenRouter** | An API aggregator for LLMs. reMarkable Roundtrip uses it to access vision-capable models (like GLM-4.5V) for handwriting transcription. |
 | **GLM-4.5V** | The default vision model used for transcription. A multimodal LLM available via OpenRouter. |
 | **Topology** | A specific combination of where Obsidian runs and where the CLI/venv/rmapi live. Four topologies are supported: T-WSL, T-MAC, T-LINUX, T-WIN. |
 | **T-WSL** | Topology: Obsidian on Windows, CLI in WSL2 Ubuntu. The primary, E2E-tested topology. |

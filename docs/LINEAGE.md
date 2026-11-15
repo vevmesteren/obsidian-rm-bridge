@@ -32,7 +32,7 @@ The original skill code lives at:
 
 1. **weasyprint → Playwright** — eliminates GTK/Pango Windows install nightmare, also replaces mmdc for mermaid rendering
 2. **Hardcoded paths → configurable** — no veviki or Hermes coupling
-3. **Script files → pip package** — `pip install obsidian-rm-bridge`, CLI `ormb`
+3. **Script files → pip package** — `pip install remarkable-roundtrip`, CLI `ormb`
 4. **Hardcoded model → configurable** — default GLM-4.5V, any OpenRouter model
 5. **Single-purpose → cross-platform** — Mac, Windows, Linux install paths documented
 

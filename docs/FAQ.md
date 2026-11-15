@@ -6,7 +6,7 @@
 
 ## General
 
-### What does obsidian-rm-bridge do?
+### What does reMarkable Roundtrip do?
 
 It publishes your Obsidian markdown notes to your reMarkable tablet as PDFs,
 lets you annotate by hand on the reMarkable, then pulls the handwritten

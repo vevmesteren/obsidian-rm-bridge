@@ -1,4 +1,4 @@
-# obsidian-rm-bridge — Architecture & Delivery Plan
+# reMarkable Roundtrip — Architecture & Delivery Plan
 
 > **Audience:** Developers and architects
 
@@ -36,7 +36,7 @@ This project is the open-source extraction of the **veviki-remarkable-bridge** �
 | Coupling | Current State | Target State |
 |----------|---------------|--------------|
 | reMarkable folder | Hardcoded `/Wiki` | Configurable, default `/Obsidian` |
-| Env/API key path | `~/.hermes/profiles/vevmesteren/.env` | Standard `~/.obsidian-rm-bridge/.env` or env var |
+| Env/API key path | `~/.hermes/profiles/vevmesteren/.env` | Standard `~/.remarkable-roundtrip/.env` or env var |
 | Vault path | Implicit veviki paths | CLI argument or config file |
 | Vision model | Hardcoded `z-ai/glm-4.5v` | Configurable, default GLM-4.5V |
 | PDF engine | weasyprint (GTK/Pango dependency) | **Playwright** (cross-platform, eliminates mmdc too) |
@@ -53,7 +53,7 @@ This project is the open-source extraction of the **veviki-remarkable-bridge** �
 | `dsebastien/obsidian-remarkable-sync` | reMarkable → Obsidian (images) | TypeScript plugin | ❌ one-way | Moderate |
 | `TimDommett/Remarkable-Sync` | reMarkable → Obsidian (PDF) | TypeScript + .rm parser | ❌ one-way | Active |
 | Scrybble | reMarkable → Obsidian (sync) | Plugin | ❌ one-way | Active |
-| **obsidian-rm-bridge** | **Obsidian → reMarkable → Obsidian** | **Python CLI** | **✅ round-trip** | **New** |
+| **reMarkable Roundtrip** | **Obsidian → reMarkable → Obsidian** | **Python CLI** | **✅ round-trip** | **New** |
 
 **Differentiator:** We are the only project that does the full round-trip — publish to reMarkable, annotate by hand, pull handwriting back into the vault as structured text via vision LLM. Every existing project is one-directional (reMarkable → Obsidian).
 
@@ -66,7 +66,7 @@ This project is the open-source extraction of the **veviki-remarkable-bridge** �
 ```mermaid
 graph TB
     User["📝 Obsidian User<br/>(Mac/Win/Linux)"]
-    ORB["🔧 obsidian-rm-bridge CLI<br/>(`ormb` — Python package)"]
+    ORB["🔧 reMarkable Roundtrip CLI<br/>(`ormb` — Python package)"]
     RM["📟 reMarkable Tablet<br/>(Paper Pro / RM2)"]
     Cloud["☁️ reMarkable Cloud API"]
     Vision["Vision LLM\n(GLM-4.5V)"]
@@ -89,7 +89,7 @@ graph TB
 
 ```mermaid
 graph TB
-    subgraph CLI["obsidian-rm-bridge CLI (`ormb`)"]
+    subgraph CLI["reMarkable Roundtrip CLI (`ormb`)"]
         Config["config.toml<br/>Vault path, RM folder,<br/>vision model, API key"]
         Publisher["publisher.py<br/>MD → HTML → PDF → upload"]
         Retriever["retriever.py<br/>download → render → transcribe → append"]
@@ -168,7 +168,7 @@ graph LR
         B1 --> B2 --> B3
     end
 
-    subgraph After["Open source (obsidian-rm-bridge)"]
+    subgraph After["Open source (reMarkable Roundtrip)"]
         A1["Playwright<br/>Python + Chromium"]
         A2["rmapi<br/>Go binary"]
         A1 --> A2
@@ -184,7 +184,7 @@ graph LR
 ## 4. Module Structure
 
 ```
-obsidian-rm-bridge/
+remarkable-roundtrip/
 ├── docs/
 │   ├── ARCHITECTURE.md          # This document
 │   └── LINEAGE.md               # Provenance and history
@@ -220,7 +220,7 @@ obsidian-rm-bridge/
 | Module | Responsibility | Key Change from Original |
 |--------|---------------|-------------------------|
 | `cli.py` | Entry point, argument parsing, command dispatch | NEW — replaces `if __name__` blocks |
-| `config.py` | Load config from `~/.obsidian-rm-bridge/config.toml` + env vars | NEW — replaces hardcoded constants |
+| `config.py` | Load config from `~/.remarkable-roundtrip/config.toml` + env vars | NEW — replaces hardcoded constants |
 | `publisher.py` | Orchestrate publish flow | Refactored from `publish.py` — injectable renderers |
 | `retriever.py` | Orchestrate retrieve flow | Refactored from `retrieve.py` — injectable clients |
 | `mermaid_renderer.py` | Render mermaid blocks to PNG via Playwright | NEW — replaces mmdc subprocess |
@@ -238,7 +238,7 @@ obsidian-rm-bridge/
 | Dependency | Mac | Windows | Linux |
 |------------|-----|---------|-------|
 | Python 3.10+ | `brew install python` | Microsoft Store / python.org | `apt install python3 python3-pip` |
-| Playwright | `pip install obsidian-rm-bridge` (auto) | Same | Same |
+| Playwright | `pip install remarkable-roundtrip` (auto) | Same | Same |
 | Chromium | `playwright install` (auto, post-install) | Same | Same + `playwright install-deps` |
 | rmapi | `brew install rmapi` or download binary | Download from releases | Download from releases |
 
@@ -246,7 +246,7 @@ obsidian-rm-bridge/
 
 ```bash
 # 1. Install the package
-pip install obsidian-rm-bridge
+pip install remarkable-roundtrip
 
 # 2. Install Playwright browser (one-time)
 ormb setup
@@ -330,7 +330,7 @@ ormb rm <page-name>                     # Delete file on reMarkable
 ## 7. Configuration Schema
 
 ```toml
-# ~/.obsidian-rm-bridge/config.toml
+# ~/.remarkable-roundtrip/config.toml
 
 [vault]
 path = "~/Documents/Obsidian"    # Default vault path
@@ -366,7 +366,7 @@ Environment variables override config file:
 
 ## 8. Delivery Plan
 
-### Epic: Open Source CLI (`obsidian-rm-bridge` v0.1.0)
+### Epic: Open Source CLI (`remarkable-roundtrip` v0.1.0)
 
 | # | Task | Scope | Dependencies | Est. |
 |---|------|-------|-------------|------|

@@ -52,7 +52,7 @@ If `ormb doctor --json` shows `paired: false`:
 
 1. Open WSL terminal at the repo:
    ```bash
-   cd /home/hermes/obsidian-rm-bridge/plugin
+   cd /home/hermes/remarkable-roundtrip/plugin
    npm install && npm run build
    ```
    Verify `main.js` is produced (no errors in esbuild output).
@@ -63,12 +63,12 @@ If `ormb doctor --json` shows `paired: false`:
    $vault = "C:\dev\veviki"
    $dest = "$vault\.obsidian\plugins\rm-bridge"
    New-Item -ItemType Directory -Force -Path $dest
-   Copy-Item "C:\dev\obsidian-rm-bridge\plugin\main.js" $dest
-   Copy-Item "C:\dev\obsidian-rm-bridge\plugin\manifest.json" $dest
+   Copy-Item "C:\dev\remarkable-roundtrip\plugin\main.js" $dest
+   Copy-Item "C:\dev\remarkable-roundtrip\plugin\manifest.json" $dest
    ```
    If `styles.css` exists, copy it too.
 
-   > **Note:** The repo lives on the Windows filesystem (`C:\dev\obsidian-rm-bridge\`), not in WSL home. Build from WSL via `/mnt/c/dev/obsidian-rm-bridge/plugin/`, but copy the built `main.js` from the Windows path.
+   > **Note:** The repo lives on the Windows filesystem (`C:\dev\remarkable-roundtrip\`), not in WSL home. Build from WSL via `/mnt/c/dev/remarkable-roundtrip/plugin/`, but copy the built `main.js` from the Windows path.
 
 3. In Obsidian: Settings → Community plugins → reload list → enable "reMarkable Roundtrip"
 

@@ -16,7 +16,7 @@
 
 ```bash
 git clone https://github.com/vevmesteren/remarkable-roundtrip.git
-cd obsidian-rm-bridge
+cd remarkable-roundtrip
 
 python3 -m venv .venv
 source .venv/bin/activate
@@ -50,7 +50,7 @@ Replace the path with your Obsidian vault path.
 
 1. Open Obsidian → Settings → Community plugins → enable "reMarkable Roundtrip"
 2. Plugin settings tab:
-   - **Python binary**: `/home/you/obsidian-rm-bridge/.venv/bin/python`
+   - **Python binary**: `/home/you/remarkable-roundtrip/.venv/bin/python`
    - **Topology**: Auto-detect (should resolve to Linux)
 3. Click "Test connection"
 

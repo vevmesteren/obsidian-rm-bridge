@@ -1,6 +1,6 @@
 # Contributing
 
-> **Audience:** Developers who want to contribute to obsidian-rm-bridge
+> **Audience:** Developers who want to contribute to reMarkable Roundtrip
 
 ← Back to [README](../README.md)
 
@@ -11,7 +11,7 @@ wrapper around a Python CLI (`ormb`), so contributions span both sides.
 
 ```bash
 git clone https://github.com/vevmesteren/remarkable-roundtrip.git
-cd obsidian-rm-bridge
+cd remarkable-roundtrip
 
 # Python CLI (with dev dependencies)
 python3 -m venv .venv
@@ -59,7 +59,7 @@ operator test playbook.
 ## Project structure
 
 ```
-obsidian-rm-bridge/
+remarkable-roundtrip/
 ├── obsidian_rm_bridge/     # Python CLI package (ormb)
 │   ├── cli.py              # Click CLI entry point
 │   ├── config.py           # TOML config + env var overrides

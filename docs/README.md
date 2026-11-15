@@ -1,4 +1,4 @@
-# obsidian-rm-bridge Documentation
+# reMarkable Roundtrip Documentation
 
 > **Audience:** All — pick the doc that matches what you need
 

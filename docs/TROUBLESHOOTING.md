@@ -34,9 +34,9 @@ flowchart TD
 
 The plugin can't find the `ormb` CLI. In the plugin settings tab, set the
 **Python binary** path to the full path of your venv's Python, e.g.:
-- WSL: `/home/you/obsidian-rm-bridge/.venv/bin/python`
-- macOS/Linux: `/home/you/obsidian-rm-bridge/.venv/bin/python`
-- Windows: `C:\dev\obsidian-rm-bridge\.venv\Scripts\python.exe`
+- WSL: `/home/you/remarkable-roundtrip/.venv/bin/python`
+- macOS/Linux: `/home/you/remarkable-roundtrip/.venv/bin/python`
+- Windows: `C:\dev\remarkable-roundtrip\.venv\Scripts\python.exe`
 
 ### "ensurepip not available" (WSL/Ubuntu)
 

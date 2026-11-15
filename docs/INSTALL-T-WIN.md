@@ -17,7 +17,7 @@
 ```powershell
 # Clone the repo
 git clone https://github.com/vevmesteren/remarkable-roundtrip.git
-cd obsidian-rm-bridge
+cd remarkable-roundtrip
 
 # Create a venv and install
 python -m venv .venv
@@ -67,7 +67,7 @@ Copy-Item manifest.json $dest
 
 1. Open Obsidian → Settings → Community plugins → enable "reMarkable Roundtrip"
 2. Plugin settings tab:
-   - **Python binary**: `C:\dev\obsidian-rm-bridge\.venv\Scripts\python.exe`
+   - **Python binary**: `C:\dev\remarkable-roundtrip\.venv\Scripts\python.exe`
    - **Topology**: Auto-detect (should resolve to Windows native)
 3. Click "Test connection"
 
