@@ -4,11 +4,9 @@
 
 The only reMarkable ↔ Obsidian tool that does the **full round-trip**.
 
-> **⚠️ Pre-release (not yet in the community store):** Installing this plugin
-> currently requires command-line (terminal) experience. A one-click install
-> from Obsidian's community plugin browser will be available after store
-> acceptance. If you're not comfortable with a terminal, check back after
-> the store listing is live.
+> **Install from the community store:** Settings → Community plugins → Browse →
+> search "reMarkable Roundtrip" → Install → Enable. The CLI backend still
+> requires terminal setup (see [Quick Start](#quick-start) below).
 
 > **Data egress:** Publishing sends your PDF to reMarkable Cloud. Pulling
 > sends page images to OpenRouter for handwriting transcription. See
